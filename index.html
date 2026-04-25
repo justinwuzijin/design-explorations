@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGL Experiments</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f5f3ee;
+      font-family: 'Georgia', serif;
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+    }
+
+    h1 { font-size: 1.1rem; font-weight: normal; letter-spacing: 0.05em; }
+
+    .experiments {
+      display: flex;
+      gap: 16px;
+    }
+
+    a {
+      display: block;
+      padding: 16px 28px;
+      background: white;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #333;
+      font-size: 0.85rem;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+      transition: box-shadow 0.15s;
+    }
+
+    a:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.14); }
+
+    a .label { font-size: 0.65rem; color: #999; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h1>WebGL Experiments</h1>
+  <div class="experiments">
+    <a href="raw-webgl/">
+      Bokeh — Raw WebGL
+      <div class="label">Manual GL setup, GLSL shaders</div>
+    </a>
+    <a href="threejs/">
+      Bokeh — Three.js
+      <div class="label">ShaderMaterial, same GLSL</div>
+    </a>
+    <a href="threejs-cube/">
+      360 Cube — Three.js
+      <div class="label">OrbitControls, damping, multi-material</div>
+    </a>
+    <a href="gallery/">
+      Floating Gallery
+      <div class="label">Scattered cards, mouse parallax, fog</div>
+    </a>
+  </div>
+</body>
+</html>

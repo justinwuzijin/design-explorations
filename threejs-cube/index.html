@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>360 Cube — Three.js</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0e0e0e;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas { display: block; }
+
+    #hint {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      translate: -50% 0;
+      font-family: 'Georgia', serif;
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.1em;
+      pointer-events: none;
+      transition: opacity 0.6s;
+    }
+
+    #hint.hidden { opacity: 0; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <p id="hint">drag to rotate &nbsp;·&nbsp; scroll to zoom</p>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
