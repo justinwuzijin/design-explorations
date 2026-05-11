@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Water Surface — WebGL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { background: #060d1a; overflow: hidden; }
+
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    #back {
+      position: fixed;
+      top: 22px;
+      left: 24px;
+      color: rgba(160, 200, 240, 0.5);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.73rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      transition: color 0.18s;
+      z-index: 10;
+    }
+    #back:hover { color: rgba(200, 225, 255, 0.9); }
+
+    #controls {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      padding: 0;
+      color: rgba(180, 215, 255, 0.9);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.73rem;
+      min-width: 230px;
+      user-select: none;
+      z-index: 10;
+    }
+
+    #controls h2 {
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: rgba(120, 165, 210, 0.6);
+      text-transform: none;
+      margin-bottom: 12px;
+    }
+
+    .group {
+      margin-bottom: 12px;
+    }
+    .group:last-child { margin-bottom: 0; }
+
+    .group-label {
+      font-size: 0.60rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: rgba(100, 145, 195, 0.55);
+      margin-bottom: 7px;
+      text-transform: none;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .row:last-child { margin-bottom: 0; }
+
+    .row label {
+      flex: 0 0 120px;
+      color: rgba(180, 215, 255, 0.75);
+      font-size: 0.71rem;
+    }
+
+    .row input[type=range] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      border-radius: 2px;
+      background: linear-gradient(to right,
+        rgba(120, 170, 240, 0.65) var(--pct, 50%),
+        rgba(255, 255, 255, 0.13) var(--pct, 50%)
+      );
+      cursor: pointer;
+      outline: none;
+    }
+    .row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: rgba(180, 215, 255, 0.95);
+      border: 2.5px solid rgba(6, 13, 26, 0.9);
+      cursor: pointer;
+      margin-top: -6.5px;
+    }
+    .row input[type=range]::-webkit-slider-runnable-track {
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    .row span {
+      flex: 0 0 42px;
+      text-align: right;
+      font-size: 0.69rem;
+      color: rgba(180, 215, 255, 0.9);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #hint {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      color: rgba(120, 165, 210, 0.35);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.67rem;
+      letter-spacing: 0.03em;
+      line-height: 1.7;
+      text-align: right;
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <a href="../" id="back">← back</a>
+
+  <div id="controls">
+    <h2>wave parameters</h2>
+
+    <div class="group">
+      <div class="group-label">propagation</div>
+      <div class="row">
+        <label>wave speed</label>
+        <input type="range" id="waveSpeed" min="0.02" max="0.70" step="0.01" value="0.18" />
+        <span id="waveSpeed-val">0.18</span>
+      </div>
+      <div class="row">
+        <label>damping</label>
+        <input type="range" id="damping" min="0.940" max="0.9995" step="0.0005" value="0.9975" />
+        <span id="damping-val">0.9975</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">physics</div>
+      <div class="row">
+        <label>surface tension</label>
+        <input type="range" id="gravity" min="0" max="0.05" step="0.001" value="0.005" />
+        <span id="gravity-val">0.005</span>
+      </div>
+      <div class="row">
+        <label>time sensitivity</label>
+        <input type="range" id="simDt" min="0.1" max="2.0" step="0.05" value="1.0" />
+        <span id="simDt-val">1.0</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">interaction</div>
+      <div class="row">
+        <label>impact strength</label>
+        <input type="range" id="impactStrength" min="0.01" max="1.0" step="0.01" value="0.45" />
+        <span id="impactStrength-val">0.45</span>
+      </div>
+      <div class="row">
+        <label>impact radius</label>
+        <input type="range" id="impactRadius" min="0.005" max="0.12" step="0.002" value="0.028" />
+        <span id="impactRadius-val">0.028</span>
+      </div>
+      <div class="row">
+        <label>displacement</label>
+        <input type="range" id="heightScale" min="0.01" max="0.4" step="0.01" value="0.07" />
+        <span id="heightScale-val">0.07</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="hint">
+    click to drop<br>
+    hold &amp; drag to disturb
+  </div>
+
+  <script>
+    function updateSliderFill(el) {
+      const pct = (el.value - el.min) / (el.max - el.min) * 100;
+      el.style.setProperty('--pct', pct + '%');
+    }
+    document.querySelectorAll('input[type=range]').forEach(el => {
+      updateSliderFill(el);
+      el.addEventListener('input', () => updateSliderFill(el));
+    });
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

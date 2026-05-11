@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Grass Wind — WebGL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -20,7 +23,7 @@
       top: 22px;
       left: 24px;
       color: rgba(180, 210, 140, 0.45);
-      font-family: 'Georgia', serif;
+      font-family: 'Inter', sans-serif;
       font-size: 0.75rem;
       text-decoration: none;
       letter-spacing: 0.05em;
@@ -33,27 +36,22 @@
       position: fixed;
       bottom: 24px;
       left: 24px;
-      background: rgba(8, 14, 4, 0.72);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(120, 160, 60, 0.15);
-      border-radius: 10px;
-      padding: 16px 20px;
-      color: #b8d090;
-      font-family: 'Georgia', serif;
-      font-size: 0.74rem;
+      padding: 0;
+      color: rgba(195, 230, 150, 0.9);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.73rem;
       min-width: 230px;
       user-select: none;
       z-index: 10;
     }
 
     #controls h2 {
-      font-size: 0.65rem;
-      font-weight: normal;
-      letter-spacing: 0.12em;
-      color: #607040;
-      text-transform: uppercase;
-      margin-bottom: 14px;
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: rgba(130, 170, 80, 0.6);
+      text-transform: none;
+      margin-bottom: 12px;
     }
 
     .row {
@@ -66,30 +64,53 @@
 
     .row label {
       flex: 0 0 138px;
-      color: #90a870;
-      font-size: 0.72rem;
+      color: rgba(175, 215, 120, 0.75);
+      font-size: 0.71rem;
     }
 
     .row input[type=range] {
       flex: 1;
-      accent-color: #6a9040;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      border-radius: 2px;
+      background: linear-gradient(to right,
+        rgba(140, 200, 80, 0.65) var(--pct, 50%),
+        rgba(255, 255, 255, 0.13) var(--pct, 50%)
+      );
       cursor: pointer;
+      outline: none;
+    }
+    .row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: rgba(195, 230, 150, 0.95);
+      border: 2.5px solid rgba(14, 26, 8, 0.9);
+      cursor: pointer;
+      margin-top: -6.5px;
+    }
+    .row input[type=range]::-webkit-slider-runnable-track {
+      height: 3px;
+      border-radius: 2px;
     }
 
     .row span {
       flex: 0 0 36px;
       text-align: right;
-      font-size: 0.70rem;
-      color: #b8d090;
+      font-size: 0.69rem;
+      color: rgba(195, 230, 150, 0.9);
+      font-variant-numeric: tabular-nums;
     }
 
     #hint {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      color: rgba(140, 180, 90, 0.35);
-      font-family: 'Georgia', serif;
-      font-size: 0.68rem;
+      color: rgba(140, 180, 90, 0.32);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.67rem;
       letter-spacing: 0.04em;
       line-height: 1.6;
       text-align: right;
@@ -104,28 +125,28 @@
   <a href="../" id="back">← back</a>
 
   <div id="controls">
-    <h2>Wind &amp; Interaction</h2>
+    <h2>wind &amp; interaction</h2>
 
     <div class="row">
-      <label>Wind Intensity</label>
+      <label>wind intensity</label>
       <input type="range" id="windIntensity" min="0" max="2" step="0.01" value="0.7" />
       <span id="windIntensity-val">0.7</span>
     </div>
 
     <div class="row">
-      <label>Wind Direction °</label>
+      <label>wind direction °</label>
       <input type="range" id="windAngle" min="0" max="360" step="1" value="45" />
       <span id="windAngle-val">45</span>
     </div>
 
     <div class="row">
-      <label>Cursor Sensitivity</label>
+      <label>cursor sensitivity</label>
       <input type="range" id="cursorSensitivity" min="0" max="1" step="0.01" value="0.5" />
       <span id="cursorSensitivity-val">0.5</span>
     </div>
 
     <div class="row">
-      <label>Influence Radius</label>
+      <label>influence radius</label>
       <input type="range" id="influenceRadius" min="0.02" max="0.5" step="0.01" value="0.18" />
       <span id="influenceRadius-val">0.18</span>
     </div>
@@ -136,6 +157,16 @@
     fluid velocity field
   </div>
 
+  <script>
+    function updateSliderFill(el) {
+      const pct = (el.value - el.min) / (el.max - el.min) * 100;
+      el.style.setProperty('--pct', pct + '%');
+    }
+    document.querySelectorAll('input[type=range]').forEach(el => {
+      updateSliderFill(el);
+      el.addEventListener('input', () => updateSliderFill(el));
+    });
+  </script>
   <script type="module" src="main.js"></script>
 </body>
 </html>

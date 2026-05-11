@@ -3,69 +3,187 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebGL Experiments</title>
+  <title>webgl experiments</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --bg:       #f6f5f2;
+      --fg:       #000000;
+      --muted:    #666666;
+      --rule:     #dedcd8;
+      --hover-bg: #eeecea;
+    }
+
+    html, body { height: 100%; }
+
     body {
-      background: #f5f3ee;
-      font-family: 'Georgia', serif;
-      color: #333;
-      min-height: 100vh;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Inter', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 32px;
+      min-height: 100vh;
+      padding: 32px 48px;
     }
 
-    h1 { font-size: 1.1rem; font-weight: normal; letter-spacing: 0.05em; }
-
-    .experiments {
+    header {
       display: flex;
-      gap: 16px;
+      align-items: baseline;
+      justify-content: space-between;
     }
 
-    a {
-      display: block;
-      padding: 16px 28px;
-      background: white;
-      border-radius: 6px;
+    .wordmark {
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      text-transform: lowercase;
+    }
+
+    .year {
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 48px 0 40px;
+      max-width: 680px;
+    }
+
+    .section-label {
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: none;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .projects {
+      list-style: none;
+      border-top: 1px solid var(--rule);
+    }
+
+    .project {
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .project a {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 12px 0;
       text-decoration: none;
-      color: #333;
-      font-size: 0.85rem;
-      box-shadow: 0 1px 8px rgba(0,0,0,0.08);
-      transition: box-shadow 0.15s;
+      color: inherit;
+      border-radius: 4px;
+      transition: background 0.1s, padding 0.1s;
     }
 
-    a:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.14); }
+    .project a:hover {
+      background: var(--hover-bg);
+      padding-left: 10px;
+      padding-right: 10px;
+      margin: 0 -10px;
+    }
 
-    a .label { font-size: 0.65rem; color: #999; margin-top: 4px; }
+    .project-left {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .project-index {
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+      width: 18px;
+    }
+
+    .project-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: #000;
+    }
+
+    .project-desc {
+      font-size: 0.73rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .project-arrow {
+      font-size: 0.8rem;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: transform 0.15s, color 0.15s;
+    }
+
+    .project a:hover .project-arrow {
+      transform: translateX(3px);
+      color: var(--fg);
+    }
+
+    footer {
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+    }
+
+    @media (max-width: 540px) {
+      body  { padding: 24px; }
+      main  { padding: 40px 0 32px; }
+      .project-desc { display: none; }
+    }
   </style>
 </head>
 <body>
-  <h1>WebGL Experiments</h1>
-  <div class="experiments">
-    <a href="raw-webgl/">
-      Bokeh — Raw WebGL
-      <div class="label">Manual GL setup, GLSL shaders</div>
-    </a>
-    <a href="threejs/">
-      Bokeh — Three.js
-      <div class="label">ShaderMaterial, same GLSL</div>
-    </a>
-    <a href="threejs-cube/">
-      360 Cube — Three.js
-      <div class="label">OrbitControls, damping, multi-material</div>
-    </a>
-    <a href="gallery/">
-      Floating Gallery
-      <div class="label">Scattered cards, mouse parallax, fog</div>
-    </a>
-    <a href="grass-fluid/">
-      Grass Wind
-      <div class="label">Fluid velocity field, curl noise, 65k blades</div>
-    </a>
-  </div>
+
+  <main>
+    <p class="section-label">webgl textures</p>
+
+    <ul class="projects">
+
+      <li class="project">
+        <a href="grass-fluid/">
+          <div class="project-left">
+            <span class="project-index">01</span>
+            <span class="project-name">grass</span>
+          </div>
+          <span class="project-arrow">→</span>
+        </a>
+      </li>
+
+      <li class="project">
+        <a href="water-surface/">
+          <div class="project-left">
+            <span class="project-index">02</span>
+            <span class="project-name">water</span>
+          </div>
+          <span class="project-arrow">→</span>
+        </a>
+      </li>
+
+    </ul>
+  </main>
+
+
 </body>
 </html>
