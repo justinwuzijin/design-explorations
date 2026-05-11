@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grass Wind — WebGL</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { background: #0e1a08; overflow: hidden; }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #back {
+      position: fixed;
+      top: 22px;
+      left: 24px;
+      color: rgba(180, 210, 140, 0.45);
+      font-family: 'Georgia', serif;
+      font-size: 0.75rem;
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      transition: color 0.18s;
+      z-index: 10;
+    }
+    #back:hover { color: rgba(180, 210, 140, 0.9); }
+
+    #controls {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      background: rgba(8, 14, 4, 0.72);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(120, 160, 60, 0.15);
+      border-radius: 10px;
+      padding: 16px 20px;
+      color: #b8d090;
+      font-family: 'Georgia', serif;
+      font-size: 0.74rem;
+      min-width: 230px;
+      user-select: none;
+      z-index: 10;
+    }
+
+    #controls h2 {
+      font-size: 0.65rem;
+      font-weight: normal;
+      letter-spacing: 0.12em;
+      color: #607040;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 9px;
+    }
+    .row:last-child { margin-bottom: 0; }
+
+    .row label {
+      flex: 0 0 138px;
+      color: #90a870;
+      font-size: 0.72rem;
+    }
+
+    .row input[type=range] {
+      flex: 1;
+      accent-color: #6a9040;
+      cursor: pointer;
+    }
+
+    .row span {
+      flex: 0 0 36px;
+      text-align: right;
+      font-size: 0.70rem;
+      color: #b8d090;
+    }
+
+    #hint {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      color: rgba(140, 180, 90, 0.35);
+      font-family: 'Georgia', serif;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      line-height: 1.6;
+      text-align: right;
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <a href="../" id="back">← back</a>
+
+  <div id="controls">
+    <h2>Wind &amp; Interaction</h2>
+
+    <div class="row">
+      <label>Wind Intensity</label>
+      <input type="range" id="windIntensity" min="0" max="2" step="0.01" value="0.7" />
+      <span id="windIntensity-val">0.7</span>
+    </div>
+
+    <div class="row">
+      <label>Wind Direction °</label>
+      <input type="range" id="windAngle" min="0" max="360" step="1" value="45" />
+      <span id="windAngle-val">45</span>
+    </div>
+
+    <div class="row">
+      <label>Cursor Sensitivity</label>
+      <input type="range" id="cursorSensitivity" min="0" max="1" step="0.01" value="0.5" />
+      <span id="cursorSensitivity-val">0.5</span>
+    </div>
+
+    <div class="row">
+      <label>Influence Radius</label>
+      <input type="range" id="influenceRadius" min="0.02" max="0.5" step="0.01" value="0.18" />
+      <span id="influenceRadius-val">0.18</span>
+    </div>
+  </div>
+
+  <div id="hint">
+    move cursor to disturb<br>
+    fluid velocity field
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
