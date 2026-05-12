@@ -9,14 +9,12 @@ uniform sampler2D u_normalMap;
 uniform float     u_time;
 
 // ---- Environment ----
-// All environment tones unified to one dark navy — no visible seams
-const vec3 BASE        = vec3(0.024, 0.051, 0.102); // #060d1a
-const vec3 SKY_ZENITH  = BASE;
-const vec3 SKY_HORIZON = BASE;
-const vec3 SKY_GROUND  = BASE;
+const vec3 SKY_ZENITH  = vec3(0.22, 0.45, 0.82);
+const vec3 SKY_HORIZON = vec3(0.55, 0.72, 0.90);
+const vec3 SKY_GROUND  = vec3(0.06, 0.10, 0.18);
 
-const vec3 WATER_DEEP  = BASE;
-const vec3 WATER_MID   = vec3(0.035, 0.075, 0.145);
+const vec3 WATER_DEEP  = vec3(0.008, 0.028, 0.075);
+const vec3 WATER_MID   = vec3(0.012, 0.055, 0.130);
 
 // Foam / disturbed surface
 const vec3 FOAM_COLOR  = vec3(0.88, 0.93, 0.98);   // near-white with faint blue tint
@@ -90,7 +88,7 @@ void main() {
   color = pow(clamp(color, 0.0, 1.0), vec3(0.90));
 
   // Manual exponential fog — matches scene.fog density
-  const vec3 FOG_COLOR = vec3(0.024, 0.051, 0.102); // #060d1a — matches BASE
+  const vec3 FOG_COLOR = vec3(0.024, 0.051, 0.102); // #060d1a — matches scene background
   float fogFactor = 1.0 - exp(-0.075 * v_depth);
   color = mix(color, FOG_COLOR, clamp(fogFactor, 0.0, 1.0));
 

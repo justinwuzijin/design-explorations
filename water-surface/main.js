@@ -121,6 +121,14 @@ async function init() {
   fboNext   = createFBO();
   fboNormal = createFBO();
 
+  // Clear all FBOs to zero so simulation starts from a flat surface
+  for (const fbo of [fboPrev, fboCurr, fboNext, fboNormal]) {
+    renderer.setRenderTarget(fbo);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear();
+  }
+  renderer.setRenderTarget(null);
+
   const texelSize = new THREE.Vector2(1 / SIM_RES, 1 / SIM_RES);
 
   // Normal strength: controls how much the height gradient tilts the normal.

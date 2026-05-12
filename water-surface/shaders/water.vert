@@ -11,10 +11,14 @@ void main() {
   // Map world-space XZ to simulation UV — works regardless of total mesh size.
   // position.xz is in local space (plane centred at origin, rotated flat).
   vec2 simUV = (position.xz / u_simSize) + 0.5;
-  v_uv = simUV;
+  v_uv = clamp(simUV, 0.0, 1.0);
 
-  // ClampToEdgeWrapping gives ~0 height outside the sim zone (sponge boundary).
-  float h = texture2D(u_heightMap, simUV).r;
+  // Fade displacement to zero outside the sim zone
+  float bx = smoothstep(0.0, 0.04, simUV.x) * (1.0 - smoothstep(0.96, 1.0, simUV.x));
+  float by = smoothstep(0.0, 0.04, simUV.y) * (1.0 - smoothstep(0.96, 1.0, simUV.y));
+  float inSim = bx * by;
+
+  float h = texture2D(u_heightMap, v_uv).r * inSim;
   v_height = h;
 
   vec3 displaced = position;
