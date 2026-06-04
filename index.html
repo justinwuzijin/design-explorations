@@ -129,6 +129,20 @@
       text-overflow: ellipsis;
     }
 
+    .project-right {
+      display: flex;
+      align-items: baseline;
+      gap: 20px;
+      flex-shrink: 0;
+    }
+
+    .project-date {
+      font-size: 0.73rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+
     .project-arrow {
       font-size: 0.8rem;
       color: var(--muted);
@@ -157,7 +171,7 @@
 <body>
 
   <main>
-    <p class="section-label">webgl textures</p>
+    <p class="section-label">my design explorations</p>
 
     <ul class="projects">
 
@@ -167,7 +181,10 @@
             <span class="project-index">01</span>
             <span class="project-name">grass</span>
           </div>
-          <span class="project-arrow">→</span>
+          <div class="project-right">
+            <span class="project-date">04.11.26</span>
+            <span class="project-arrow">→</span>
+          </div>
         </a>
       </li>
 
@@ -177,7 +194,10 @@
             <span class="project-index">02</span>
             <span class="project-name">water</span>
           </div>
-          <span class="project-arrow">→</span>
+          <div class="project-right">
+            <span class="project-date">04.12.26</span>
+            <span class="project-arrow">→</span>
+          </div>
         </a>
       </li>
 
@@ -187,7 +207,10 @@
             <span class="project-index">03</span>
             <span class="project-name">lock</span>
           </div>
-          <span class="project-arrow">→</span>
+          <div class="project-right">
+            <span class="project-date">06.4.26</span>
+            <span class="project-arrow">→</span>
+          </div>
         </a>
       </li>
 
