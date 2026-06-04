@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Combination Lock — WebGL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { background: #ffffff; overflow: hidden; }
+
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    #back {
+      position: fixed;
+      top: 22px;
+      left: 24px;
+      color: rgba(0, 0, 0, 0.4);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.73rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      transition: color 0.18s;
+      z-index: 10;
+    }
+    #back:hover { color: rgba(0, 0, 0, 0.8); }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <a href="../" id="back">← back</a>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
