@@ -177,14 +177,6 @@ for (let i = 0; i < DIAL_COUNT; i++) {
   });
 }
 
-// central rod through all wheels (vertical)
-const rodGeo = new THREE.CylinderGeometry(0.13, 0.13, totalSpan + THICK + 0.5, 24);
-const rod = new THREE.Mesh(
-  rodGeo,
-  new THREE.MeshStandardMaterial({ color: 0x9aa0ad, metalness: 0.95, roughness: 0.25 })
-);
-rig.add(rod);
-
 // ---- Shackle: polished steel U-hoop coming out of the top ----
 // Lives inside a pivot group so it can lift + swing open around its right leg.
 const SHACKLE_W = 0.62;            // half the distance between the two legs
@@ -193,31 +185,38 @@ const shacklePivot = new THREE.Group();
 shacklePivot.position.set(SHACKLE_W, 0, 0); // pivot sits on the right leg axis
 rig.add(shacklePivot);
 
+// The right leg is the retained pivot: it runs deep into the body and stays seated
+// when the lock opens. The left leg is shorter so it clears the body and swings out.
+const LEFT_BOTTOM  = bodyTop - 0.22;   // free leg: only lightly seated
+const RIGHT_BOTTOM = bodyTop - 1.0;    // retained leg: anchored deep in the body
+
 (function buildShackle() {
   const w    = SHACKLE_W;
   const zOff = 0.0;
-  const legBottom = bodyTop - 0.06;       // tucks just into the body top
-  const legTop    = bodyTop + 0.95;       // where the straight legs meet the arc
-  const arcR      = w;                    // semicircle radius == half leg spacing
+  const legTop = bodyTop + 0.95;          // where the straight legs meet the arc
+  const arcR   = w;                       // semicircle radius == half leg spacing
 
   const pts = [];
   const legSeg = 8;
+  // left (free) leg, bottom -> top
   for (let i = 0; i <= legSeg; i++) {
-    const y = legBottom + (legTop - legBottom) * (i / legSeg);
+    const y = LEFT_BOTTOM + (legTop - LEFT_BOTTOM) * (i / legSeg);
     pts.push(new THREE.Vector3(-w, y, zOff));
   }
+  // arc over the top
   const arcSeg = 40;
   for (let i = 1; i < arcSeg; i++) {
     const a = Math.PI - (Math.PI * i) / arcSeg; // pi -> 0
     pts.push(new THREE.Vector3(Math.cos(a) * arcR, legTop + Math.sin(a) * arcR, zOff));
   }
+  // right (retained) leg, top -> deep bottom
   for (let i = 0; i <= legSeg; i++) {
-    const y = legTop - (legTop - legBottom) * (i / legSeg);
+    const y = legTop - (legTop - RIGHT_BOTTOM) * (i / legSeg);
     pts.push(new THREE.Vector3(w, y, zOff));
   }
 
   const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.0);
-  const shackleGeo = new THREE.TubeGeometry(curve, 220, 0.125, 24, false);
+  const shackleGeo = new THREE.TubeGeometry(curve, 260, 0.125, 24, false);
   const shackleMat = new THREE.MeshStandardMaterial({
     color: 0xdfe3e8, metalness: 1.0, roughness: 0.18,
     envMap, envMapIntensity: 1.25,
@@ -225,16 +224,19 @@ rig.add(shacklePivot);
   const shackle = new THREE.Mesh(shackleGeo, shackleMat);
   shacklePivot.add(shackle);
 
-  const capGeo = new THREE.SphereGeometry(0.125, 20, 16);
-  for (const x of [-w, w]) {
-    const cap = new THREE.Mesh(capGeo, shackleMat);
-    cap.position.set(x, legBottom, zOff);
-    shacklePivot.add(cap);
-  }
-
   // shift children back by the pivot offset so the closed shackle sits centred
   shacklePivot.children.forEach(c => { c.position.x -= w; });
 })();
+
+// Static bezels on the body top marking the two holes the legs pass through.
+// They belong to the body (not the shackle) so they stay put as the shackle lifts.
+const holeGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.1, 24);
+const holeMat = new THREE.MeshStandardMaterial({ color: 0x141418, metalness: 0.8, roughness: 0.5 });
+for (const x of [-SHACKLE_W, SHACKLE_W]) {
+  const hole = new THREE.Mesh(holeGeo, holeMat);
+  hole.position.set(x, bodyTop - 0.01, 0);
+  rig.add(hole);
+}
 
 // front read-line indicator: a slim arrow on the right pointing at the column
 const markGeo = new THREE.ConeGeometry(0.13, 0.3, 4);
