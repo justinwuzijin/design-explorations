@@ -27,12 +27,83 @@
       z-index: 10;
     }
     #back:hover { color: rgba(0, 0, 0, 0.8); }
+
+    #combo {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 10;
+      font-family: 'Inter', sans-serif;
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 14px;
+      padding: 14px 16px 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+      user-select: none;
+    }
+    .combo-title {
+      font-size: 0.66rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(0, 0, 0, 0.45);
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .combo-row { display: flex; gap: 8px; justify-content: center; }
+    .combo-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .combo-btn {
+      width: 38px;
+      height: 22px;
+      border: none;
+      border-radius: 7px;
+      background: rgba(0, 0, 0, 0.05);
+      color: rgba(0, 0, 0, 0.5);
+      font-size: 0.6rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .combo-btn:hover { background: rgba(0, 0, 0, 0.12); color: rgba(0, 0, 0, 0.85); }
+    .combo-btn:active { background: rgba(0, 0, 0, 0.2); }
+    .combo-val {
+      width: 38px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: #15151a;
+      background: rgba(0, 0, 0, 0.04);
+      border-radius: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    .combo-status {
+      margin-top: 11px;
+      text-align: center;
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      padding: 5px 0;
+      border-radius: 8px;
+      transition: color 0.25s, background 0.25s;
+    }
+    .combo-status.locked { color: #b23c3c; background: rgba(178, 60, 60, 0.1); }
+    .combo-status.open   { color: #1f9d57; background: rgba(31, 157, 87, 0.12); }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
 
   <a href="../" id="back">← back</a>
+
+  <div id="combo"></div>
 
   <script type="module" src="main.js"></script>
 </body>
