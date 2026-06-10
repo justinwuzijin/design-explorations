@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Watercolor — WebGL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { background: #fbf9f4; overflow: hidden; }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: none;
+      touch-action: none;
+    }
+
+    #back {
+      position: fixed;
+      top: 22px;
+      left: 24px;
+      color: rgba(0, 0, 0, 0.4);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.73rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      transition: color 0.18s;
+      z-index: 10;
+    }
+    #back:hover { color: rgba(0, 0, 0, 0.8); }
+
+    /* brush-size cursor ring */
+    #brush-ring {
+      position: fixed;
+      left: -100px;
+      top: -100px;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(40, 50, 90, 0.45);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9;
+    }
+
+    #panel {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 10;
+      font-family: 'Inter', sans-serif;
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 14px;
+      padding: 14px 16px 14px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+      user-select: none;
+      width: 216px;
+    }
+    .panel-title {
+      font-size: 0.66rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(0, 0, 0, 0.45);
+      margin-bottom: 12px;
+    }
+    .control { margin-bottom: 10px; }
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .control label {
+      font-size: 0.7rem;
+      color: rgba(0, 0, 0, 0.6);
+    }
+    .control .val {
+      font-size: 0.66rem;
+      color: rgba(0, 0, 0, 0.4);
+      font-variant-numeric: tabular-nums;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(0, 0, 0, 0.12);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #323a5a;
+      cursor: pointer;
+      border: none;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #323a5a;
+      cursor: pointer;
+      border: none;
+    }
+    #clear {
+      width: 100%;
+      margin-top: 4px;
+      padding: 7px 0;
+      border: none;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.06);
+      color: rgba(0, 0, 0, 0.6);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    #clear:hover { background: rgba(0, 0, 0, 0.12); color: rgba(0, 0, 0, 0.85); }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <a href="../" id="back">← back</a>
+
+  <div id="brush-ring"></div>
+
+  <div id="panel">
+    <div class="panel-title">watercolor</div>
+
+    <div class="control">
+      <div class="control-row">
+        <label for="brushSize">brush</label>
+        <span class="val" id="brushSize-val">46px</span>
+      </div>
+      <input type="range" id="brushSize" min="10" max="130" step="1" value="46" />
+    </div>
+
+    <div class="control">
+      <div class="control-row">
+        <label for="pigment">ink</label>
+        <span class="val" id="pigment-val">0.024</span>
+      </div>
+      <input type="range" id="pigment" min="0.004" max="0.08" step="0.002" value="0.024" />
+    </div>
+
+    <div class="control">
+      <div class="control-row">
+        <label for="wetness">water</label>
+        <span class="val" id="wetness-val">0.16</span>
+      </div>
+      <input type="range" id="wetness" min="0.04" max="0.4" step="0.01" value="0.16" />
+    </div>
+
+    <div class="control">
+      <div class="control-row">
+        <label for="edge">edge bleed</label>
+        <span class="val" id="edge-val">6</span>
+      </div>
+      <input type="range" id="edge" min="0" max="14" step="0.5" value="6" />
+    </div>
+
+    <button id="clear">clear</button>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
