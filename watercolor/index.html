@@ -69,6 +69,24 @@
       color: rgba(0, 0, 0, 0.45);
       margin-bottom: 12px;
     }
+
+    #swatches {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .swatch {
+      aspect-ratio: 1;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      outline: 2px solid transparent;
+      outline-offset: 2px;
+      transition: outline-color 0.12s, transform 0.12s;
+    }
+    .swatch:hover { transform: scale(1.12); }
+    .swatch.active { outline-color: rgba(0, 0, 0, 0.55); }
     .control { margin-bottom: 10px; }
     .control-row {
       display: flex;
@@ -140,6 +158,8 @@
   <div id="panel">
     <div class="panel-title">watercolor</div>
 
+    <div id="swatches"></div>
+
     <div class="control">
       <div class="control-row">
         <label for="brushSize">brush</label>
@@ -151,9 +171,9 @@
     <div class="control">
       <div class="control-row">
         <label for="pigment">ink</label>
-        <span class="val" id="pigment-val">0.024</span>
+        <span class="val" id="pigment-val">0.04</span>
       </div>
-      <input type="range" id="pigment" min="0.004" max="0.08" step="0.002" value="0.024" />
+      <input type="range" id="pigment" min="0.004" max="0.12" step="0.002" value="0.04" />
     </div>
 
     <div class="control">

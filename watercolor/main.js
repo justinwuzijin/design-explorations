@@ -1,19 +1,44 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js';
 
 // Wet-on-wet watercolor sim, two fullscreen passes per frame:
-//   1. sim pass   (ping-pong RG texture: R = pigment, G = water)
-//   2. display pass (tone ramp + edge rim + granulation)
+//   1. sim pass   (ping-pong RGBA texture: RGB = pigment absorbance, A = water)
+//   2. display pass (Beer–Lambert transmittance + edge rim + granulation)
 // Strokes inject water + pigment along the pointer segment; pigment keeps
 // diffusing while the paper is wet, then locks in place as it dries.
+// Colours are stored as per-channel absorbance, so washes laid into each
+// other mix subtractively like real watercolor (blue + yellow -> green).
 
 const SIM_SCALE = 0.5; // sim runs at half canvas resolution
 
 const params = {
   brushSize: 46,     // px
-  pigment:   0.024,  // deposit per frame
+  pigment:   0.04,   // deposit per frame
   wetness:   0.16,   // water per frame
   edge:      6.0,    // rim darkening
 };
+
+const PALETTE = [
+  { name: 'indigo',           hex: '#323a5a' },
+  { name: 'ultramarine',      hex: '#2b56a8' },
+  { name: 'cerulean',         hex: '#2e85bd' },
+  { name: 'viridian',         hex: '#1e7a5a' },
+  { name: 'sap green',        hex: '#5f8430' },
+  { name: 'cadmium yellow',   hex: '#eec522' },
+  { name: 'orange',           hex: '#e2801f' },
+  { name: 'vermilion',        hex: '#cf3c22' },
+  { name: 'alizarin crimson', hex: '#9c2440' },
+  { name: 'violet',           hex: '#69398c' },
+  { name: 'burnt sienna',     hex: '#8a5230' },
+  { name: 'sepia',            hex: '#4c3a28' },
+];
+
+// A wash is a transparent filter: convert the swatch's sRGB reflectance to
+// per-channel absorbance for the sim (display inverts with exp(-absorbance)).
+function absorbance(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  const ch = x => Math.min(3.4, -Math.log(Math.max(x / 255, 0.015)));
+  return new THREE.Vector3(ch(v >> 16 & 255), ch(v >> 8 & 255), ch(v & 255));
+}
 
 // ---- Renderer ----
 const canvas = document.getElementById('canvas');
@@ -64,6 +89,7 @@ const stroke = {
   drawing: false,
   from: new THREE.Vector2(0.5, 0.5),
   to:   new THREE.Vector2(0.5, 0.5),
+  charge: 0, // water held by the brush; refilled on every touch
 };
 
 function eventUV(e) {
@@ -75,6 +101,7 @@ function eventUV(e) {
 
 canvas.addEventListener('pointerdown', e => {
   stroke.drawing = true;
+  stroke.charge = 1; // freshly dipped
   stroke.from.copy(eventUV(e));
   stroke.to.copy(stroke.from);
   canvas.setPointerCapture?.(e.pointerId);
@@ -131,6 +158,8 @@ async function init() {
       u_aspect:      { value: window.innerWidth / window.innerHeight },
       u_pigment:     { value: params.pigment },
       u_water:       { value: params.wetness },
+      u_absorb:      { value: absorbance(PALETTE[0].hex) },
+      u_charge:      { value: 0 },
       u_evaporation: { value: 0.55 },
       u_diffusion:   { value: 0.32 },
       u_edgeFlow:    { value: 0.13 },
@@ -157,8 +186,27 @@ async function init() {
   viewScene.add(new THREE.Mesh(quadGeo, viewMat));
 
   setupControls();
+  setupPalette();
   updateRingSize();
   animate();
+}
+
+// ---- Palette ----
+function setupPalette() {
+  const holder = document.getElementById('swatches');
+  if (!holder) return;
+  PALETTE.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.className = 'swatch' + (i === 0 ? ' active' : '');
+    b.style.background = c.hex;
+    b.title = c.name;
+    b.addEventListener('click', () => {
+      simMat.uniforms.u_absorb.value.copy(absorbance(c.hex));
+      holder.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      b.classList.add('active');
+    });
+    holder.appendChild(b);
+  });
 }
 
 // ---- Controls ----
@@ -183,7 +231,7 @@ function setupControls() {
 }
 
 function clearPaper() {
-  renderer.setClearColor(0x000000, 1);
+  renderer.setClearColor(0x000000, 0); // alpha is water now — clear to dry
   for (const fbo of [fboA, fboB]) {
     renderer.setRenderTarget(fbo);
     renderer.clear(true, false, false);
@@ -206,6 +254,14 @@ function animate() {
   simMat.uniforms.u_pigment.value = params.pigment;
   simMat.uniforms.u_water.value   = params.wetness;
   viewMat.uniforms.u_edge.value   = params.edge;
+
+  // the brush empties as it travels (and slowly while held down),
+  // so the first touch floods and the tail of the stroke runs dry
+  if (stroke.drawing) {
+    const moved = stroke.to.distanceTo(stroke.from);
+    stroke.charge = Math.max(0.12, stroke.charge - moved * 1.6 - dt * 0.22);
+  }
+  simMat.uniforms.u_charge.value = stroke.drawing ? stroke.charge : 0;
 
   // sim step: A -> B
   simMat.uniforms.u_prev.value = fboA.texture;
