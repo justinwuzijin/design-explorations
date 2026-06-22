@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flipbook — WebGL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { background: #fbf9f4; overflow: hidden; }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #back {
+      position: fixed;
+      top: 22px;
+      left: 24px;
+      color: rgba(0, 0, 0, 0.4);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.73rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      transition: color 0.18s;
+      z-index: 10;
+    }
+    #back:hover { color: rgba(0, 0, 0, 0.8); }
+
+    #panel {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 10;
+      font-family: 'Inter', sans-serif;
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 14px;
+      padding: 14px 16px 14px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+      user-select: none;
+      width: 216px;
+    }
+    .panel-title {
+      font-size: 0.66rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(0, 0, 0, 0.45);
+      margin-bottom: 12px;
+    }
+
+    .control { margin-bottom: 10px; }
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .control label {
+      font-size: 0.7rem;
+      color: rgba(0, 0, 0, 0.6);
+    }
+    .control .val {
+      font-size: 0.66rem;
+      color: rgba(0, 0, 0, 0.4);
+      font-variant-numeric: tabular-nums;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(0, 0, 0, 0.12);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #323a5a;
+      cursor: pointer;
+      border: none;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #323a5a;
+      cursor: pointer;
+      border: none;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    button {
+      flex: 1;
+      padding: 7px 0;
+      border: none;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.06);
+      color: rgba(0, 0, 0, 0.6);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    button:hover {
+      background: rgba(0, 0, 0, 0.12);
+      color: rgba(0, 0, 0, 0.85);
+    }
+    button.active {
+      background: rgba(0, 0, 0, 0.15);
+      color: rgba(0, 0, 0, 0.9);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <a href="../" id="back">← back</a>
+
+  <div id="panel">
+    <div class="panel-title">flipbook</div>
+
+    <div class="control">
+      <div class="control-row">
+        <label for="speed">speed</label>
+        <span class="val" id="speed-val">12 fps</span>
+      </div>
+      <input type="range" id="speed" min="1" max="24" step="1" value="12" />
+    </div>
+
+    <div class="control">
+      <div class="control-row">
+        <label for="renderFps">render fps</label>
+        <span class="val" id="renderFps-val">30 fps</span>
+      </div>
+      <input type="range" id="renderFps" min="1" max="60" step="1" value="30" />
+    </div>
+
+    <div class="control">
+      <div class="control-row">
+        <label>frame</label>
+        <span class="val" id="frame-val">1 / 12</span>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button id="playPause">pause</button>
+      <button id="reset">reset</button>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
