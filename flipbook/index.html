@@ -72,6 +72,20 @@
       color: rgba(0, 0, 0, 0.4);
       font-variant-numeric: tabular-nums;
     }
+    select {
+      width: 100%;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.74rem;
+      color: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+      padding: 6px 8px;
+      cursor: pointer;
+      outline: none;
+    }
+    select:hover { background: rgba(0, 0, 0, 0.07); }
+
     input[type="range"] {
       -webkit-appearance: none;
       appearance: none;
@@ -140,6 +154,13 @@
 
     <div class="control">
       <div class="control-row">
+        <label for="source">source</label>
+      </div>
+      <select id="source"></select>
+    </div>
+
+    <div class="control">
+      <div class="control-row">
         <label for="speed">speed</label>
         <span class="val" id="speed-val">8 fps</span>
       </div>
@@ -167,6 +188,6 @@
     </div>
   </div>
 
-  <script type="module" src="main.js?v=3"></script>
+  <script type="module" src="main.js?v=17"></script>
 </body>
 </html>

@@ -9,11 +9,13 @@ let animationSpeed = 8;
 let renderFps = 60;
 let isPlaying = true;
 let currentFrame = 0;
-const totalFrames = 12;
+let totalFrames = 12; // driven by frames.length whenever a source loads
+const BASKETBALL_FRAMES = 12;
 
 // Timing
 let lastAnimationTime = 0;
 let lastRenderTime = 0;
+let lastFrameT = 0;
 let frames = [];
 
 // Page flip state
@@ -111,29 +113,118 @@ function ellipsePoints(cx, cy, rx, ry, n) {
   return pts;
 }
 
+// Light-blue notebook grid, drawn procedurally over a page rect. Deterministic
+// (no per-frame randomness) so the grid stays put across frames and flips; a
+// faint sine wobble + alpha variation give it a hand-ruled, organic feel.
+const GRID_COLS = 22;
+function drawPaperGrid(g, x, y, w, h) {
+  const cell = w / GRID_COLS;
+  const rows = Math.max(1, Math.round(h / cell));
+  g.save();
+  g.lineWidth = 1;
+  for (let c = 0; c <= GRID_COLS; c++) {
+    const px = x + c * cell + Math.sin(c * 12.9) * 0.5;
+    g.strokeStyle = `rgba(122,168,219,${0.32 + 0.07 * Math.sin(c * 7.3)})`;
+    g.beginPath();
+    g.moveTo(px, y);
+    g.lineTo(px, y + h);
+    g.stroke();
+  }
+  for (let r = 0; r <= rows; r++) {
+    const py = y + r * cell + Math.sin(r * 9.7) * 0.5;
+    g.strokeStyle = `rgba(122,168,219,${0.32 + 0.07 * Math.sin(r * 5.1)})`;
+    g.beginPath();
+    g.moveTo(x, py);
+    g.lineTo(x + w, py);
+    g.stroke();
+  }
+  g.restore();
+}
+
+// ---- Value noise (fast integer hash) for organic, non-uniform pencil work ----
+function ihash(ix, iy) {
+  let n = (ix | 0) * 374761393 + (iy | 0) * 668265263;
+  n = (n ^ (n >> 13)) * 1274126177;
+  n = (n ^ (n >> 16)) >>> 0;
+  return n / 4294967295;
+}
+function vnoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = ihash(ix, iy), b = ihash(ix + 1, iy);
+  const c = ihash(ix, iy + 1), d = ihash(ix + 1, iy + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function smoothstep(a, b, x) {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+// One band of pencil hatching, but deliberately irregular: each stroke gets its
+// own thickness, position jitter, and pressure that also varies ALONG its length,
+// with occasional lifted/broken strokes — so it reads as hand-drawn, not a screen.
+// The thickness also breathes along the stroke, so a single line swells and
+// tapers the way a graphite tip does as the hand bears down and eases off.
+//   u = coordinate along the stroke, v = coordinate across the strokes
+function pencilBand(u, v, spacing) {
+  const cell = v / spacing;
+  const idx = Math.floor(cell);
+  const tn = vnoise(idx * 1.3, 2.0);          // per-stroke base thickness + jitter
+  const swell = vnoise(u * 0.03, idx * 0.7 + 4.0); // thickness wandering along its length
+  // wide thickness range: some strokes are hairlines, others are bold and dark
+  const thick = 0.08 + 0.72 * tn * (0.5 + 0.8 * swell);
+  const f = cell - idx + (tn - 0.5) * 0.34;
+  const center = thick * 0.5;
+  const dist = Math.abs(f - center);
+  if (dist > center) return 0;
+  let profile = 1 - dist / center;            // tapered edges (soft pressure)
+  profile *= profile;
+  // pressure varies along the stroke (two scales: long fades + quick flicks)
+  const along = vnoise(u * 0.05, idx * 0.6 + 11.0) * 0.7
+              + vnoise(u * 0.16, idx * 0.9 + 23.0) * 0.3;
+  if (along < 0.16) return 0;                  // lifted / broken stroke
+  return profile * (0.36 + 0.82 * along);
+}
+
+// Sketchbook paper with a little grain + the blue grid — shared by every source
+function drawSketchPaper(g) {
+  g.fillStyle = '#fbfaf5';
+  g.fillRect(0, 0, 400, 550);
+  g.fillStyle = 'rgba(70, 64, 50, 0.015)';
+  for (let t = 0; t < 1100; t++) {
+    g.fillRect(Math.random() * 400, Math.random() * 550, 1, 1);
+  }
+  drawPaperGrid(g, 0, 0, 400, 550);
+}
+
+// A blank grid page (paper + grid, no drawing) — used for the back of a turning
+// page so the reverse side is also lined/grid paper, like a real notebook.
+let gridPageCanvas = null;
+function getGridPage() {
+  if (!gridPageCanvas) {
+    gridPageCanvas = document.createElement('canvas');
+    gridPageCanvas.width = 400;
+    gridPageCanvas.height = 550;
+    drawSketchPaper(gridPageCanvas.getContext('2d'));
+  }
+  return gridPageCanvas;
+}
+
 // Generate basketball bouncing frames
 function generateFrames() {
   frames = [];
 
-  for (let i = 0; i < totalFrames; i++) {
+  for (let i = 0; i < BASKETBALL_FRAMES; i++) {
     const frameCanvas = document.createElement('canvas');
     const ctx = frameCanvas.getContext('2d');
 
     frameCanvas.width = 400;
     frameCanvas.height = 550;
 
-    // Warm sketchbook paper with a little grain
-    ctx.fillStyle = '#faf8f1';
-    ctx.fillRect(0, 0, 400, 550);
+    drawSketchPaper(ctx);
 
-    ctx.fillStyle = 'rgba(70, 64, 50, 0.015)';
-    for (let t = 0; t < 1100; t++) {
-      const tx = Math.random() * 400;
-      const ty = Math.random() * 550;
-      ctx.fillRect(tx, ty, 1, 1);
-    }
-
-    const progress = i / (totalFrames - 1);
+    const progress = i / (BASKETBALL_FRAMES - 1);
     const bounceHeight = Math.abs(Math.sin(progress * Math.PI)) * 180;
     const ballY = 420 - bounceHeight;
     const ballX = 200;
@@ -146,10 +237,16 @@ function generateFrames() {
     const cx = ballX, cy = ballY, rx = radiusX, ry = radiusY;
     const ink = '58,55,60'; // graphite
 
+    // opaque paper coat so the ball sits on top of the grid and overrides it
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbfaf5';
+    ctx.fill();
+
     // faint colour wash so it still reads as a basketball, not flat orange
     ctx.beginPath();
     ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(214,120,52,0.13)';
+    ctx.fillStyle = 'rgba(214,120,52,0.16)';
     ctx.fill();
 
     // graphite hatching builds form on the lower-right (shadow side)
@@ -209,6 +306,228 @@ function generateFrames() {
   }
 }
 
+// ---- Sources: the procedural basketball plus any scraped image sequences ----
+const SOURCES = [{ id: 'basketball', label: 'basketball', type: 'procedural' }];
+let currentSourceId = 'basketball';
+
+// Discover image-sequence flipbooks listed in sequences/manifest.json
+async function loadManifest() {
+  try {
+    const r = await fetch('sequences/manifest.json?ts=' + Date.now());
+    if (!r.ok) return;
+    const list = await r.json();
+    for (const e of list) {
+      if (!e || !e.id || SOURCES.some(s => s.id === e.id)) continue;
+      SOURCES.push({
+        id: e.id,
+        label: e.label || e.id,
+        type: 'sequence',
+        count: e.count | 0,
+        ext: e.ext || 'png',
+        raw: !!e.raw,
+      });
+    }
+  } catch (_) {
+    /* no manifest yet — only the basketball is available */
+  }
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error('failed to load ' + src));
+    im.src = src;
+  });
+}
+
+// Pre-stylized frames (oil pastel, watercolor, etc.) are used as-is — they
+// already include the sketchbook paper and grid from the batch script.
+function buildRawFrame(img) {
+  const W = 400, H = 550;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0, W, H);
+  return c;
+}
+
+// A short, confident pencil stroke (two soft passes with a slight bow). Jitter
+// is deterministic (value-noise from a seed) so strokes are stable across frames
+// — this is the same multi-pass look as the basketball's pencilStroke.
+function inkStroke(g, x0, y0, x1, y1, width, alpha, seed) {
+  const mx = (x0 + x1) / 2 + (vnoise(seed, 1.3) - 0.5) * 1.8;
+  const my = (y0 + y1) / 2 + (vnoise(seed, 2.7) - 0.5) * 1.8;
+  for (let k = 0; k < 2; k++) {
+    const j = (vnoise(seed + k * 4.1, 5.0) - 0.5) * 1.1;
+    g.beginPath();
+    g.moveTo(x0 + j, y0 + j);
+    g.quadraticCurveTo(mx + j * 0.5, my + j * 0.5, x1 + j, y1 + j);
+    g.strokeStyle = `rgba(56,53,58,${alpha * (0.6 + 0.4 * vnoise(seed + k * 7.3, 9.0))})`;
+    g.lineWidth = width * (0.65 + 0.6 * vnoise(seed + k * 2.9, 3.0));
+    g.stroke();
+  }
+}
+
+// One hatch stroke centred at (cx,cy), with occasional lifted/broken strokes.
+function hatchAt(g, cx, cy, ang, len, alpha, seed) {
+  if (vnoise(seed, 13.0) < 0.12) return;
+  const hx = Math.cos(ang) * len * 0.5, hy = Math.sin(ang) * len * 0.5;
+  inkStroke(g, cx - hx, cy - hy, cx + hx, cy + hy, 0.7 + 0.7 * vnoise(seed, 3.0), alpha, seed);
+}
+
+// Turn a photographic frame into a hand-drawn pencil line drawing over the
+// sketchbook paper: confident contour strokes that follow the image edges plus
+// layered hatching — the basketball's stroke aesthetic, with more line detail.
+// `frameSeed` shifts all the stroke jitter per page, so every page looks
+// individually drawn (the lines wobble frame-to-frame, like real hand-drawn
+// animation) rather than being identical from frame to frame.
+function buildSketchFrame(img, frameSeed = 0) {
+  const FS = frameSeed * 131.7;          // per-page jitter offset (boiling lines)
+  const W = 400, H = 550;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  drawSketchPaper(g);
+
+  // letterbox the frame to fit the page
+  const scale = Math.min(W / img.width, H / img.height);
+  const dw = Math.max(1, Math.round(img.width * scale));
+  const dh = Math.max(1, Math.round(img.height * scale));
+  const dx = Math.round((W - dw) / 2);
+  const dy = Math.round((H - dh) / 2);
+
+  // Tone is read at reduced resolution (drops fine photographic detail), but the
+  // strokes are drawn at full resolution so the pencil lines stay crisp.
+  const DETAIL = 0.6;            // lower = looser shapes
+  const sw = Math.max(1, Math.round(dw * DETAIL));
+  const sh = Math.max(1, Math.round(dh * DETAIL));
+
+  const low = document.createElement('canvas');
+  low.width = sw; low.height = sh;
+  const lg = low.getContext('2d');
+  lg.imageSmoothingEnabled = true;
+  lg.drawImage(img, 0, 0, sw, sh);            // downscale to drop small detail
+
+  const full = document.createElement('canvas');
+  full.width = dw; full.height = dh;
+  const fg = full.getContext('2d');
+  fg.imageSmoothingEnabled = true;
+  fg.drawImage(low, 0, 0, sw, sh, 0, 0, dw, dh); // smooth upscale = detail-limited tone
+  const fdata = fg.getImageData(0, 0, dw, dh).data;
+
+  const lum = new Float32Array(dw * dh);
+  for (let p = 0, q = 0; p < fdata.length; p += 4, q++) {
+    lum[q] = 0.299 * fdata[p] + 0.587 * fdata[p + 1] + 0.114 * fdata[p + 2];
+  }
+
+  const Lf = (x, y) => lum[(y < 0 ? 0 : y >= dh ? dh - 1 : y) * dw + (x < 0 ? 0 : x >= dw ? dw - 1 : x)];
+
+  // A light paper coat subdues the grid under the subject (kept soft so the
+  // pencil strokes stay the focus; the grid still shows through in empty areas).
+  const COAT = 0.7, PR = 251, PG = 250, PB = 245;
+  const coat = fg.createImageData(dw, dh);
+  const cd = coat.data;
+  for (let i = 0, q = 0; q < lum.length; i += 4, q++) {
+    const a = smoothstep(0.06, 0.34, 1 - lum[q] / 255) * COAT;
+    cd[i] = PR; cd[i + 1] = PG; cd[i + 2] = PB; cd[i + 3] = Math.round(a * 255);
+  }
+  fg.putImageData(coat, 0, 0);
+  g.drawImage(full, dx, dy);
+
+  // Draw the line drawing in page space, offset to the letterbox origin.
+  g.save();
+  g.translate(dx, dy);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+
+  // 1) Contour strokes riding along the image edges — confident pencil lines
+  //    that follow the forms, like the basketball's outline and seams.
+  const CSTEP = 4.0, ETH = 13;
+  for (let y = 2; y < dh - 2; y += CSTEP) {
+    for (let x = 2; x < dw - 2; x += CSTEP) {
+      const gx = (Lf(x + 1, y - 1) + 2 * Lf(x + 1, y) + Lf(x + 1, y + 1))
+               - (Lf(x - 1, y - 1) + 2 * Lf(x - 1, y) + Lf(x - 1, y + 1));
+      const gy = (Lf(x - 1, y + 1) + 2 * Lf(x, y + 1) + Lf(x + 1, y + 1))
+               - (Lf(x - 1, y - 1) + 2 * Lf(x, y - 1) + Lf(x + 1, y - 1));
+      const mag = Math.sqrt(gx * gx + gy * gy) / 8;
+      if (mag <= ETH) continue;
+      const strength = Math.min(1, (mag - ETH) / 55);
+      const ang = Math.atan2(gy, gx) + Math.PI / 2;          // tangent to the edge
+      const seed = x * 0.137 + y * 0.091 + FS;
+      const len = CSTEP * (1.2 + 1.2 * strength) * (0.8 + 0.5 * vnoise(seed, 21.0));
+      const hx = Math.cos(ang) * len * 0.5, hy = Math.sin(ang) * len * 0.5;
+      inkStroke(g, x - hx, y - hy, x + hx, y + hy,
+        0.7 + 1.7 * strength, Math.min(1, 0.4 + 0.65 * strength), seed);
+    }
+  }
+
+  // 2) Hatching for shading; more stroke directions stack as the tone deepens.
+  const HSTEP = 5.0;
+  for (let y = 2; y < dh - 2; y += HSTEP) {
+    for (let x = 2; x < dw - 2; x += HSTEP) {
+      const d = 1 - Lf(x, y) / 255;
+      if (d <= 0.2) continue;
+      const seed = x * 0.071 + y * 0.169 + FS;
+      const wob = (vnoise(x * 0.05 + FSX, y * 0.05 + FSY) - 0.5) * 0.5;
+      const len = HSTEP * (1.1 + 0.5 * vnoise(x * 0.1 + FSX, y * 0.1 + FSY));
+      hatchAt(g, x, y, 0.79 + wob, len, 0.16 + 0.42 * d, seed);
+      if (d > 0.42) hatchAt(g, x, y, -0.79 + wob, len, 0.15 + 0.42 * d, seed + 5.5);
+      if (d > 0.62) hatchAt(g, x, y, 0.02 + wob, len, 0.15 + 0.42 * d, seed + 11.0);
+      if (d > 0.82) hatchAt(g, x, y, 1.55 + wob, len, 0.16 + 0.42 * d, seed + 17.0);
+    }
+  }
+
+  g.restore();
+  return c;
+}
+
+function showLoading() {
+  ctx.fillStyle = '#fbf9f4';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.font = "14px 'Inter', sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('loading…', canvas.width / 2, canvas.height / 2);
+  ctx.textAlign = 'start';
+}
+
+// Build frames[] for the chosen source, then reset playback state
+async function loadSource(id) {
+  const src = SOURCES.find(s => s.id === id) || SOURCES[0];
+  currentSourceId = src.id;
+
+  if (src.type === 'sequence') {
+    showLoading();
+    const built = [];
+    for (let i = 1; i <= src.count; i++) {
+      const n = String(i).padStart(3, '0');
+      try {
+        const img = await loadImage(`sequences/${src.id}/frame_${n}.${src.ext}`);
+        built.push(src.raw ? buildRawFrame(img) : buildSketchFrame(img, i));
+      } catch (_) {
+        /* skip missing frames */
+      }
+    }
+    if (built.length > 0) {
+      frames = built;
+    } else {
+      generateFrames(); // fall back to the basketball if nothing loaded
+      currentSourceId = 'basketball';
+    }
+  } else {
+    generateFrames();
+  }
+
+  totalFrames = frames.length;
+  currentFrame = 0;
+  flipProgress = 0;
+  isFlipping = false;
+  lastAnimationTime = 0;
+  updateFrameDisplay();
+  drawNotebook();
+}
+
 // Layout helpers — the spine is the page's LEFT edge; the page lies to the
 // right of it, and turned pages stack to the left of it.
 const PAGE_ASPECT = 400 / 550; // source frame proportions
@@ -237,9 +556,10 @@ function drawCoverBoard(x, y, w, h) {
   ctx.shadowColor = 'rgba(0,0,0,0.14)';
   ctx.shadowBlur = 18;
   ctx.shadowOffsetY = 6;
-  ctx.fillStyle = '#e7e3d9';
+  ctx.fillStyle = '#ede9df';
   ctx.fillRect(x, y, w, h);
   ctx.restore();
+  drawPaperGrid(ctx, x, y, w, h);
   ctx.strokeStyle = 'rgba(0,0,0,0.07)';
   ctx.lineWidth = 1;
   ctx.strokeRect(x, y, w, h);
@@ -249,8 +569,10 @@ function drawCoverBoard(x, y, w, h) {
 function drawStack(x, y, w, h, count, dir) {
   for (let i = count - 1; i >= 0; i--) {
     const o = (i + 1) * 1.6;
-    ctx.fillStyle = i % 2 ? '#f4f2ec' : '#efece4';
+    ctx.fillStyle = i % 2 ? '#f7f6f0' : '#f1efe7';
     ctx.fillRect(x + dir * o, y + o, w, h);
+    // the topmost page of the stack is visible, so it gets the notebook grid
+    if (i === 0) drawPaperGrid(ctx, x + dir * o, y + o, w, h);
     ctx.strokeStyle = 'rgba(0,0,0,0.06)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + dir * o, y + o, w, h);
@@ -299,49 +621,50 @@ function drawRestingPage(img, spineX, y, w, h) {
 // the paper. Each loop is a slanted chrome ring with a punched hole, a drop
 // shadow on the page, and a specular glint.
 function drawSpiral(spineX, y, h) {
-  const rings = Math.max(8, Math.round(h / 24));
+  // small, tightly-packed loops like a real flipbook coil
+  const rings = Math.max(16, Math.round(h / 13));
   const step = h / rings;
-  const rx = 14;
-  const ry = step * 0.44;
+  const rx = 7.5;
+  const ry = step * 0.62; // loops nearly touch, so the coil reads as a spiral
 
+  ctx.lineCap = 'round';
   for (let i = 0; i < rings; i++) {
     const cy = y + step * (i + 0.5);
 
-    // punched holes just inside each page edge
-    ctx.fillStyle = 'rgba(0,0,0,0.20)';
+    // small punched holes just inside each page edge
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath();
-    ctx.ellipse(spineX + 12, cy, 2.4, 4.0, 0, 0, Math.PI * 2);
+    ctx.ellipse(spineX + 7, cy, 1.4, 2.4, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(spineX - 12, cy, 2.4, 4.0, 0, 0, Math.PI * 2);
+    ctx.ellipse(spineX - 7, cy, 1.4, 2.4, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // soft shadow the wire casts on the paper
-    ctx.strokeStyle = 'rgba(0,0,0,0.16)';
-    ctx.lineWidth = 5.5;
-    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,0.14)';
+    ctx.lineWidth = 3.0;
     ctx.beginPath();
-    ctx.ellipse(spineX + 1.5, cy + 2.5, rx, ry, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(spineX + 1, cy + 1.6, rx, ry, -0.42, 0, Math.PI * 2);
     ctx.stroke();
 
     // chrome wire: bright top-left to dark bottom-right
     const metal = ctx.createLinearGradient(spineX - rx, cy - ry, spineX + rx, cy + ry);
-    metal.addColorStop(0.0,  '#fdfdfe');
-    metal.addColorStop(0.28, '#c8cbd1');
-    metal.addColorStop(0.55, '#92969e');
-    metal.addColorStop(0.78, '#6e717a');
-    metal.addColorStop(1.0,  '#a6aab2');
+    metal.addColorStop(0.0,  '#fcfcfd');
+    metal.addColorStop(0.30, '#c8cbd1');
+    metal.addColorStop(0.58, '#94989f');
+    metal.addColorStop(0.80, '#71747c');
+    metal.addColorStop(1.0,  '#a3a7af');
     ctx.strokeStyle = metal;
-    ctx.lineWidth = 4.5;
+    ctx.lineWidth = 2.6;
     ctx.beginPath();
-    ctx.ellipse(spineX, cy, rx, ry, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(spineX, cy, rx, ry, -0.42, 0, Math.PI * 2);
     ctx.stroke();
 
     // specular glint on the upper-left of the loop
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 0.9;
     ctx.beginPath();
-    ctx.ellipse(spineX, cy, rx, ry, -0.4, Math.PI * 1.02, Math.PI * 1.52);
+    ctx.ellipse(spineX, cy, rx, ry, -0.42, Math.PI * 1.02, Math.PI * 1.5);
     ctx.stroke();
   }
   ctx.lineCap = 'butt';
@@ -424,10 +747,10 @@ function drawFlippingPage(img, spineX, pageY, width, height, progress) {
     X = nx; Z += sa * ds;
   }
 
-  // contact shadow the lifting page drops on the spread below: darkest at the
-  // start of the turn (page still close to the surface) and fading to light as
-  // the page rises and swings away
-  const cast = Math.cos(progress * Math.PI * 0.5); // 1 -> 0 across the flip
+  // contact shadow the lifting page drops on the spread below: nil while flat,
+  // swelling as it lifts to vertical, then fading back to nil as it lays down —
+  // zero at both ends so consecutive flips transition smoothly with no pop
+  const cast = Math.sin(progress * Math.PI); // 0 -> 1 -> 0 across the flip
   if (cast > 0.01) {
     ctx.save();
     ctx.fillStyle = `rgba(0,0,0,${0.26 * cast})`;
@@ -438,15 +761,16 @@ function drawFlippingPage(img, spineX, pageY, width, height, progress) {
     ctx.restore();
   }
 
-  // second pass: paint each slice, front shows the print, back shows paper
+  // second pass: paint each slice. Front shows the drawing; the back is the
+  // reverse of the sheet, so it shows the blank grid paper (lined both sides).
+  const backPage = getGridPage();
   for (const s of slices) {
     const front = s.ca >= 0;
 
     if (front) {
       ctx.drawImage(img, s.srcX, 0, s.srcW, height, s.left, s.topY, s.sliceW, s.drawH);
     } else {
-      ctx.fillStyle = PAGE_BACK;
-      ctx.fillRect(s.left, s.topY, s.sliceW, s.drawH);
+      ctx.drawImage(backPage, s.srcX, 0, s.srcW, height, s.left, s.topY, s.sliceW, s.drawH);
     }
 
     // shade by tilt: the front darkens as it stands up; the back of the page
@@ -476,30 +800,21 @@ function drawFlippingPage(img, spineX, pageY, width, height, progress) {
 
 // Animation loop
 function animate(timestamp) {
-  const animationInterval = 1000 / animationSpeed;
   const renderInterval = 1000 / renderFps;
+  const flipDuration = Math.max(70, 1000 / animationSpeed); // ms per page turn
 
-  // Trigger page flip — the turn takes most of the interval, leaving a brief
-  // beat where the page rests so the frame reads before the next turn
-  if (isPlaying && !isFlipping && timestamp - lastAnimationTime >= animationInterval) {
+  const dt = lastFrameT ? timestamp - lastFrameT : 0;
+  lastFrameT = timestamp;
+
+  // Continuous flipping: the turn phase accumulates and rolls straight from one
+  // page into the next (wrapping 1 -> 0), so there is no rest beat and nothing
+  // resets between flips — the whole riffle reads as one smooth motion.
+  if (isPlaying) {
     isFlipping = true;
-    flipStartTime = timestamp;
-    flipProgress = 0;
-    // the turn fills almost the whole interval so pages flow continuously,
-    // like riffling a real flipbook, with only a sliver of rest between turns
-    flipDuration = Math.max(70, animationInterval * 0.92);
-    lastAnimationTime = timestamp;
-  }
-
-  // Update flip animation
-  if (isFlipping) {
-    const elapsed = timestamp - flipStartTime;
-    flipProgress = Math.min(elapsed / flipDuration, 1);
-
-    if (flipProgress >= 1) {
-      isFlipping = false;
+    flipProgress += dt / flipDuration;
+    while (flipProgress >= 1) {
+      flipProgress -= 1;
       currentFrame = (currentFrame + 1) % totalFrames;
-      flipProgress = 0;
       updateFrameDisplay();
     }
   }
@@ -519,12 +834,29 @@ function updateFrameDisplay() {
 }
 
 // UI Controls
+const sourceSelect = document.getElementById('source');
 const speedSlider = document.getElementById('speed');
 const speedVal = document.getElementById('speed-val');
 const renderFpsSlider = document.getElementById('renderFps');
 const renderFpsVal = document.getElementById('renderFps-val');
 const playPauseBtn = document.getElementById('playPause');
 const resetBtn = document.getElementById('reset');
+
+function populateSources() {
+  if (!sourceSelect) return;
+  sourceSelect.innerHTML = '';
+  for (const s of SOURCES) {
+    const o = document.createElement('option');
+    o.value = s.id;
+    o.textContent = s.label;
+    sourceSelect.appendChild(o);
+  }
+  sourceSelect.value = currentSourceId;
+}
+
+sourceSelect?.addEventListener('change', (e) => {
+  loadSource(e.target.value);
+});
 
 speedSlider.addEventListener('input', (e) => {
   animationSpeed = parseFloat(e.target.value);
@@ -552,6 +884,10 @@ resetBtn.addEventListener('click', () => {
 });
 
 // Initialize
-generateFrames();
-updateFrameDisplay();
-requestAnimationFrame(animate);
+async function init() {
+  await loadManifest();
+  populateSources();
+  await loadSource(currentSourceId);
+  requestAnimationFrame(animate);
+}
+init();
