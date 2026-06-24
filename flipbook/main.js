@@ -376,6 +376,26 @@ function hatchAt(g, cx, cy, ang, len, alpha, seed) {
   inkStroke(g, cx - hx, cy - hy, cx + hx, cy + hy, 0.7 + 0.7 * vnoise(seed, 3.0), alpha, seed);
 }
 
+// A long, continuous pencil stroke through many points (two soft passes, with a
+// little per-point wobble). Used for flowing contour and hatch lines so strokes
+// connect into long marks instead of short, repetitive ticks.
+function pencilPolyline(g, pts, width, alpha, seed) {
+  if (pts.length < 2) return;
+  for (let k = 0; k < 2; k++) {
+    g.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const jx = (vnoise(seed + i * 0.6 + k * 13, 1.0) - 0.5) * 1.3;
+      const jy = (vnoise(seed + i * 0.6 + k * 13, 2.0) - 0.5) * 1.3;
+      const x = pts[i][0] + jx, y = pts[i][1] + jy;
+      if (i === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.strokeStyle = `rgba(56,53,58,${alpha * (0.6 + 0.4 * vnoise(seed + k * 5, 9))})`;
+    g.lineWidth = width * (0.7 + 0.5 * vnoise(seed + k * 3, 4));
+    g.stroke();
+  }
+}
+
 // Turn a photographic frame into a hand-drawn pencil line drawing over the
 // sketchbook paper: confident contour strokes that follow the image edges plus
 // layered hatching — the basketball's stroke aesthetic, with more line detail.
@@ -397,9 +417,9 @@ function buildSketchFrame(img, frameSeed = 0) {
   const dx = Math.round((W - dw) / 2);
   const dy = Math.round((H - dh) / 2);
 
-  // Tone is read at reduced resolution (drops fine photographic detail), but the
-  // strokes are drawn at full resolution so the pencil lines stay crisp.
-  const DETAIL = 0.6;            // lower = looser shapes
+  // Tone is read at a fairly high resolution so the actual image reads clearly,
+  // while the strokes are drawn at full resolution and stay crisp.
+  const DETAIL = 0.8;            // higher = more faithful to the real image
   const sw = Math.max(1, Math.round(dw * DETAIL));
   const sh = Math.max(1, Math.round(dh * DETAIL));
 
@@ -423,16 +443,19 @@ function buildSketchFrame(img, frameSeed = 0) {
 
   const Lf = (x, y) => lum[(y < 0 ? 0 : y >= dh ? dh - 1 : y) * dw + (x < 0 ? 0 : x >= dw ? dw - 1 : x)];
 
-  // A light paper coat subdues the grid under the subject (kept soft so the
-  // pencil strokes stay the focus; the grid still shows through in empty areas).
-  const COAT = 0.7, PR = 251, PG = 250, PB = 245;
-  const coat = fg.createImageData(dw, dh);
-  const cd = coat.data;
+  // Tonal layer: render the actual image's values in graphite so the real video
+  // content reads clearly, like a pencil tonal drawing. Light areas stay
+  // transparent (paper + grid show through); mid/dark areas build up graphite.
+  const TONE = 0.8;
+  const IR = 56, IG = 53, IB = 58; // graphite
+  const tone = fg.createImageData(dw, dh);
+  const tnd = tone.data;
   for (let i = 0, q = 0; q < lum.length; i += 4, q++) {
-    const a = smoothstep(0.06, 0.34, 1 - lum[q] / 255) * COAT;
-    cd[i] = PR; cd[i + 1] = PG; cd[i + 2] = PB; cd[i + 3] = Math.round(a * 255);
+    const d = 1 - lum[q] / 255;
+    const a = smoothstep(0.10, 0.92, d) * TONE;
+    tnd[i] = IR; tnd[i + 1] = IG; tnd[i + 2] = IB; tnd[i + 3] = Math.round(a * 255);
   }
-  fg.putImageData(coat, 0, 0);
+  fg.putImageData(tone, 0, 0);
   g.drawImage(full, dx, dy);
 
   // Draw the line drawing in page space, offset to the letterbox origin.
@@ -441,40 +464,87 @@ function buildSketchFrame(img, frameSeed = 0) {
   g.lineCap = 'round';
   g.lineJoin = 'round';
 
-  // 1) Contour strokes riding along the image edges — confident pencil lines
-  //    that follow the forms, like the basketball's outline and seams.
-  const CSTEP = 4.0, ETH = 13;
-  for (let y = 2; y < dh - 2; y += CSTEP) {
-    for (let x = 2; x < dw - 2; x += CSTEP) {
-      const gx = (Lf(x + 1, y - 1) + 2 * Lf(x + 1, y) + Lf(x + 1, y + 1))
-               - (Lf(x - 1, y - 1) + 2 * Lf(x - 1, y) + Lf(x - 1, y + 1));
-      const gy = (Lf(x - 1, y + 1) + 2 * Lf(x, y + 1) + Lf(x + 1, y + 1))
-               - (Lf(x - 1, y - 1) + 2 * Lf(x, y - 1) + Lf(x + 1, y - 1));
-      const mag = Math.sqrt(gx * gx + gy * gy) / 8;
-      if (mag <= ETH) continue;
-      const strength = Math.min(1, (mag - ETH) / 55);
-      const ang = Math.atan2(gy, gx) + Math.PI / 2;          // tangent to the edge
-      const seed = x * 0.137 + y * 0.091 + FS;
-      const len = CSTEP * (1.2 + 1.2 * strength) * (0.8 + 0.5 * vnoise(seed, 21.0));
-      const hx = Math.cos(ang) * len * 0.5, hy = Math.sin(ang) * len * 0.5;
-      inkStroke(g, x - hx, y - hy, x + hx, y + hy,
-        0.7 + 1.7 * strength, Math.min(1, 0.4 + 0.65 * strength), seed);
+  // Local gradient of the tone, used to follow edges.
+  const grad = (x, y) => {
+    const gx = (Lf(x + 1, y - 1) + 2 * Lf(x + 1, y) + Lf(x + 1, y + 1))
+             - (Lf(x - 1, y - 1) + 2 * Lf(x - 1, y) + Lf(x - 1, y + 1));
+    const gy = (Lf(x - 1, y + 1) + 2 * Lf(x, y + 1) + Lf(x + 1, y + 1))
+             - (Lf(x - 1, y - 1) + 2 * Lf(x, y - 1) + Lf(x + 1, y - 1));
+    return [gx / 8, gy / 8];
+  };
+  const ETH = 12;
+
+  // 1) Contour lines: long pencil strokes that ride ALONG the edges. Each is
+  //    seeded from a scattered point and walks the contour (re-steering by the
+  //    gradient) for a randomized length, so the marks are long and flowing,
+  //    not a field of short repetitive ticks.
+  const CSEED = 7;
+  for (let gy = 0; gy < dh; gy += CSEED) {
+    for (let gx0 = 0; gx0 < dw; gx0 += CSEED) {
+      const seed = gx0 * 0.217 + gy * 0.149 + FS + 91;
+      if (vnoise(seed, 31) < 0.4) continue;             // sparse starts -> fewer, longer lines
+      const sx = gx0 + (vnoise(seed, 1) - 0.5) * CSEED * 1.5;
+      const sy = gy + (vnoise(seed, 2) - 0.5) * CSEED * 1.5;
+      const [gX, gY] = grad(sx, sy);
+      const m0 = Math.hypot(gX, gY);
+      if (m0 <= ETH) continue;
+      const maxSteps = 8 + Math.floor(vnoise(seed, 17) * 30); // very varied length
+      const step = 2.2;
+      const trace = (sign) => {
+        const pts = [];
+        let x = sx, y = sy;
+        let tx = -gY, ty = gX; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+        for (let s = 0; s < maxSteps; s++) {
+          x += sign * tx * step; y += sign * ty * step;
+          if (x < 1 || x >= dw - 1 || y < 1 || y >= dh - 1) break;
+          const [ngx, ngy] = grad(x, y);
+          if (Math.hypot(ngx, ngy) <= ETH * 0.7) break;
+          let nx = -ngy, ny = ngx; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+          if (nx * tx + ny * ty < 0) { nx = -nx; ny = -ny; } // keep a consistent heading
+          tx = nx; ty = ny;
+          pts.push([x, y]);
+        }
+        return pts;
+      };
+      const pts = trace(-1).reverse();
+      pts.push([sx, sy]);
+      for (const p of trace(1)) pts.push(p);
+      if (pts.length < 3) continue;
+      const strength = Math.min(1, (m0 - ETH) / 55);
+      pencilPolyline(g, pts, 0.7 + 1.5 * strength, Math.min(1, 0.45 + 0.6 * strength), seed);
     }
   }
 
-  // 2) Hatching for shading; more stroke directions stack as the tone deepens.
-  const HSTEP = 5.0;
-  for (let y = 2; y < dh - 2; y += HSTEP) {
-    for (let x = 2; x < dw - 2; x += HSTEP) {
-      const d = 1 - Lf(x, y) / 255;
-      if (d <= 0.2) continue;
-      const seed = x * 0.071 + y * 0.169 + FS;
-      const wob = (vnoise(x * 0.05 + FSX, y * 0.05 + FSY) - 0.5) * 0.5;
-      const len = HSTEP * (1.1 + 0.5 * vnoise(x * 0.1 + FSX, y * 0.1 + FSY));
-      hatchAt(g, x, y, 0.79 + wob, len, 0.16 + 0.42 * d, seed);
-      if (d > 0.42) hatchAt(g, x, y, -0.79 + wob, len, 0.15 + 0.42 * d, seed + 5.5);
-      if (d > 0.62) hatchAt(g, x, y, 0.02 + wob, len, 0.15 + 0.42 * d, seed + 11.0);
-      if (d > 0.82) hatchAt(g, x, y, 1.55 + wob, len, 0.16 + 0.42 * d, seed + 17.0);
+  // 2) Hatching: long strokes that flow THROUGH the dark masses. Each runs a
+  //    randomized length and stops when it leaves the shadow, so masses fill
+  //    with connected lines whose angle/length/pressure all vary.
+  const HSEED = 8;
+  for (let gy = 0; gy < dh; gy += HSEED) {
+    for (let gx0 = 0; gx0 < dw; gx0 += HSEED) {
+      const seed = gx0 * 0.123 + gy * 0.371 + FS;
+      const sx = gx0 + (vnoise(seed, 1) - 0.5) * HSEED * 1.7;
+      const sy = gy + (vnoise(seed, 2) - 0.5) * HSEED * 1.7;
+      const d0 = 1 - Lf(sx, sy) / 255;
+      if (d0 <= 0.32) continue;                          // texture only the shadow masses
+      const pick = vnoise(seed, 7);                      // pick a hatch direction band
+      let baseAng = 0.8;
+      if (d0 > 0.5 && pick > 0.5) baseAng = -0.8;
+      else if (d0 > 0.72 && pick > 0.66) baseAng = 0.05;
+      const ang = baseAng + (vnoise(seed, 11) - 0.5) * 0.5;
+      const dirx = Math.cos(ang), diry = Math.sin(ang);
+      const maxSteps = 6 + Math.floor(vnoise(seed, 17) * 26);
+      const step = 2.4;
+      const pts = [[sx, sy]];
+      let x = sx, y = sy;
+      for (let s = 0; s < maxSteps; s++) {
+        x += dirx * step + (vnoise(x * 0.09, y * 0.09 + seed) - 0.5) * 1.2;
+        y += diry * step + (vnoise(x * 0.09 + 4, y * 0.09 + seed) - 0.5) * 1.2;
+        if (x < 0 || x >= dw || y < 0 || y >= dh) break;
+        if (1 - Lf(x, y) / 255 < 0.18) break;            // left the shadow mass
+        pts.push([x, y]);
+      }
+      if (pts.length < 2) continue;
+      pencilPolyline(g, pts, 0.6 + 0.7 * vnoise(seed, 3), 0.06 + 0.2 * d0, seed);
     }
   }
 
