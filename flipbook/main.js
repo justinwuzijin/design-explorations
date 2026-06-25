@@ -11,6 +11,8 @@ let isPlaying = true;
 let currentFrame = 0;
 let totalFrames = 12; // driven by frames.length whenever a source loads
 const BASKETBALL_FRAMES = 12;
+let detail = 5;       // "pencil strokes" detail level, 1 (loose) .. 10 (dense)
+let currentSeq = null; // cached images of the loaded sketch sequence, for rebuilds
 
 // Timing
 let lastAnimationTime = 0;
@@ -404,6 +406,15 @@ function pencilPolyline(g, pts, width, alpha, seed) {
 // animation) rather than being identical from frame to frame.
 function buildSketchFrame(img, frameSeed = 0) {
   const FS = frameSeed * 131.7;          // per-page jitter offset (boiling lines)
+
+  // "pencil strokes" detail (1..10): higher = finer tone + denser, more strokes.
+  const dt01 = (Math.max(1, Math.min(10, detail)) - 1) / 9; // 0..1
+  const DETAIL = 0.55 + dt01 * 0.45;     // tone resolution: 0.55 .. 1.0
+  const CSEED  = 11 - dt01 * 7.5;        // contour seed spacing: sparse .. dense
+  const HSEED  = 12 - dt01 * 8;          // hatch seed spacing: sparse .. dense
+  const ETH    = 16 - dt01 * 7;          // edge sensitivity: coarse .. fine
+  const CSKIP  = 0.6 - dt01 * 0.4;       // contour start gate: many skipped .. few
+
   const W = 400, H = 550;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -417,9 +428,8 @@ function buildSketchFrame(img, frameSeed = 0) {
   const dx = Math.round((W - dw) / 2);
   const dy = Math.round((H - dh) / 2);
 
-  // Tone is read at a fairly high resolution so the actual image reads clearly,
-  // while the strokes are drawn at full resolution and stay crisp.
-  const DETAIL = 0.8;            // higher = more faithful to the real image
+  // Tone is read at a resolution set by the detail level; strokes are drawn at
+  // full resolution and stay crisp.
   const sw = Math.max(1, Math.round(dw * DETAIL));
   const sh = Math.max(1, Math.round(dh * DETAIL));
 
@@ -441,24 +451,95 @@ function buildSketchFrame(img, frameSeed = 0) {
     lum[q] = 0.299 * fdata[p] + 0.587 * fdata[p + 1] + 0.114 * fdata[p + 2];
   }
 
-  const Lf = (x, y) => lum[(y < 0 ? 0 : y >= dh ? dh - 1 : y) * dw + (x < 0 ? 0 : x >= dw ? dw - 1 : x)];
+  const Lf = (x, y) => {
+    const xi = x < 0 ? 0 : x >= dw ? dw - 1 : Math.floor(x);
+    const yi = y < 0 ? 0 : y >= dh ? dh - 1 : Math.floor(y);
+    return lum[yi * dw + xi]; // integer indices: a Float32Array returns undefined otherwise
+  };
 
-  // Tonal layer: render the actual image's values in graphite so the real video
-  // content reads clearly, like a pencil tonal drawing. Light areas stay
-  // transparent (paper + grid show through); mid/dark areas build up graphite.
-  const TONE = 0.8;
-  const IR = 56, IG = 53, IB = 58; // graphite
-  const tone = fg.createImageData(dw, dh);
-  const tnd = tone.data;
-  for (let i = 0, q = 0; q < lum.length; i += 4, q++) {
-    const d = 1 - lum[q] / 255;
-    const a = smoothstep(0.10, 0.92, d) * TONE;
-    tnd[i] = IR; tnd[i + 1] = IG; tnd[i + 2] = IB; tnd[i + 3] = Math.round(a * 255);
+  // A second, FULL-resolution luminance buffer (no downscale) keeps the fine
+  // detail the tone buffer throws away — eyes, nose, mouth, jawline, sharp edges
+  // — so a crisp feature pass can draw them back in and the subject reads clearly.
+  const hi = document.createElement('canvas');
+  hi.width = dw; hi.height = dh;
+  const hictx = hi.getContext('2d');
+  hictx.imageSmoothingEnabled = true;
+  hictx.drawImage(img, 0, 0, dw, dh);
+  const hdata = hictx.getImageData(0, 0, dw, dh).data;
+  const lumH = new Float32Array(dw * dh);
+  for (let p = 0, q = 0; p < hdata.length; p += 4, q++) {
+    lumH[q] = 0.299 * hdata[p] + 0.587 * hdata[p + 1] + 0.114 * hdata[p + 2];
   }
-  fg.putImageData(tone, 0, 0);
-  g.drawImage(full, dx, dy);
 
-  // Draw the line drawing in page space, offset to the letterbox origin.
+  // Local-contrast (unsharp) enhancement: subtract a heavily blurred copy so
+  // low-contrast detail inside dark regions — eyes, nose, mouth, beard — is
+  // exaggerated instead of flattening into one black mass. The strong version
+  // drives the crisp feature edges; a milder version nudges the hatch density,
+  // so the face's structure shows up in BOTH the shading and the linework.
+  const bw = Math.max(2, Math.round(dw / 18)), bh = Math.max(2, Math.round(dh / 18));
+  const bc = document.createElement('canvas');
+  bc.width = bw; bc.height = bh;
+  const bctx = bc.getContext('2d');
+  bctx.imageSmoothingEnabled = true;
+  bctx.drawImage(img, 0, 0, bw, bh);
+  const bdata = bctx.getImageData(0, 0, bw, bh).data;
+  const blurLum = new Float32Array(bw * bh);
+  for (let p = 0, q = 0; p < bdata.length; p += 4, q++) {
+    blurLum[q] = 0.299 * bdata[p] + 0.587 * bdata[p + 1] + 0.114 * bdata[p + 2];
+  }
+  const blurAt = (x, y) => {
+    const bx = x < 0 ? 0 : x >= dw ? bw - 1 : Math.floor((x / dw) * bw);
+    const by = y < 0 ? 0 : y >= dh ? bh - 1 : Math.floor((y / dh) * bh);
+    return blurLum[by * bw + bx];
+  };
+  for (let yy = 0, q = 0; yy < dh; yy++) {
+    for (let xx = 0; xx < dw; xx++, q++) {
+      const b = blurAt(xx, yy);
+      const eh = lumH[q] + 1.15 * (lumH[q] - b); // strong: crisp feature edges
+      lumH[q] = eh < 0 ? 0 : eh > 255 ? 255 : eh;
+      const et = lum[q] + 0.55 * (lum[q] - b);   // mild: nudges hatch density
+      lum[q] = et < 0 ? 0 : et > 255 ? 255 : et;
+    }
+  }
+
+  const LfH = (x, y) => {
+    const xi = x < 0 ? 0 : x >= dw ? dw - 1 : Math.floor(x);
+    const yi = y < 0 ? 0 : y >= dh ? dh - 1 : Math.floor(y);
+    return lumH[yi * dw + xi];
+  };
+  const gradH = (x, y) => {
+    const gx = (LfH(x + 1, y - 1) + 2 * LfH(x + 1, y) + LfH(x + 1, y + 1))
+             - (LfH(x - 1, y - 1) + 2 * LfH(x - 1, y) + LfH(x - 1, y + 1));
+    const gy = (LfH(x - 1, y + 1) + 2 * LfH(x, y + 1) + LfH(x + 1, y + 1))
+             - (LfH(x - 1, y - 1) + 2 * LfH(x, y - 1) + LfH(x + 1, y - 1));
+    return [gx / 8, gy / 8];
+  };
+
+  // Direct photographic reference: a soft grayscale ghost of the ACTUAL frame,
+  // composited with 'multiply' so it only deepens where the photo is dark and
+  // leaves the paper/grid untouched in the lights. This grounds the drawing in
+  // the real image — faces and fine detail read clearly — while the pencil
+  // strokes still carry the bulk of the look on top. Not everything is a stroke.
+  const REF = 0.42;            // strength of the photographic reference
+  const refC = document.createElement('canvas');
+  refC.width = dw; refC.height = dh;
+  const rctx = refC.getContext('2d');
+  const refData = rctx.createImageData(dw, dh);
+  const rpx = refData.data;
+  for (let i = 0, q = 0; q < dw * dh; i += 4, q++) {
+    let L = 0.299 * hdata[i] + 0.587 * hdata[i + 1] + 0.114 * hdata[i + 2];
+    L = 255 * Math.pow(L / 255, 0.85); // lift slightly so the multiply stays gentle
+    rpx[i] = rpx[i + 1] = rpx[i + 2] = L;
+    rpx[i + 3] = 255;
+  }
+  rctx.putImageData(refData, 0, 0);
+  g.save();
+  g.globalCompositeOperation = 'multiply';
+  g.globalAlpha = REF;
+  g.drawImage(refC, dx, dy);
+  g.restore();
+
+  // Draw the line drawing in page space, on top of the reference.
   g.save();
   g.translate(dx, dy);
   g.lineCap = 'round';
@@ -472,17 +553,15 @@ function buildSketchFrame(img, frameSeed = 0) {
              - (Lf(x - 1, y - 1) + 2 * Lf(x, y - 1) + Lf(x + 1, y - 1));
     return [gx / 8, gy / 8];
   };
-  const ETH = 12;
 
   // 1) Contour lines: long pencil strokes that ride ALONG the edges. Each is
   //    seeded from a scattered point and walks the contour (re-steering by the
   //    gradient) for a randomized length, so the marks are long and flowing,
   //    not a field of short repetitive ticks.
-  const CSEED = 7;
   for (let gy = 0; gy < dh; gy += CSEED) {
     for (let gx0 = 0; gx0 < dw; gx0 += CSEED) {
       const seed = gx0 * 0.217 + gy * 0.149 + FS + 91;
-      if (vnoise(seed, 31) < 0.4) continue;             // sparse starts -> fewer, longer lines
+      if (vnoise(seed, 31) < CSKIP) continue;           // detail sets how sparse the starts are
       const sx = gx0 + (vnoise(seed, 1) - 0.5) * CSEED * 1.5;
       const sy = gy + (vnoise(seed, 2) - 0.5) * CSEED * 1.5;
       const [gX, gY] = grad(sx, sy);
@@ -515,36 +594,105 @@ function buildSketchFrame(img, frameSeed = 0) {
     }
   }
 
-  // 2) Hatching: long strokes that flow THROUGH the dark masses. Each runs a
-  //    randomized length and stops when it leaves the shadow, so masses fill
-  //    with connected lines whose angle/length/pressure all vary.
-  const HSEED = 8;
-  for (let gy = 0; gy < dh; gy += HSEED) {
-    for (let gx0 = 0; gx0 < dw; gx0 += HSEED) {
-      const seed = gx0 * 0.123 + gy * 0.371 + FS;
-      const sx = gx0 + (vnoise(seed, 1) - 0.5) * HSEED * 1.7;
-      const sy = gy + (vnoise(seed, 2) - 0.5) * HSEED * 1.7;
-      const d0 = 1 - Lf(sx, sy) / 255;
-      if (d0 <= 0.32) continue;                          // texture only the shadow masses
-      const pick = vnoise(seed, 7);                      // pick a hatch direction band
-      let baseAng = 0.8;
-      if (d0 > 0.5 && pick > 0.5) baseAng = -0.8;
-      else if (d0 > 0.72 && pick > 0.66) baseAng = 0.05;
-      const ang = baseAng + (vnoise(seed, 11) - 0.5) * 0.5;
-      const dirx = Math.cos(ang), diry = Math.sin(ang);
-      const maxSteps = 6 + Math.floor(vnoise(seed, 17) * 26);
-      const step = 2.4;
-      const pts = [[sx, sy]];
-      let x = sx, y = sy;
-      for (let s = 0; s < maxSteps; s++) {
-        x += dirx * step + (vnoise(x * 0.09, y * 0.09 + seed) - 0.5) * 1.2;
-        y += diry * step + (vnoise(x * 0.09 + 4, y * 0.09 + seed) - 0.5) * 1.2;
-        if (x < 0 || x >= dw || y < 0 || y >= dh) break;
-        if (1 - Lf(x, y) / 255 < 0.18) break;            // left the shadow mass
-        pts.push([x, y]);
+  // 2) Tonal hatching — the image is reconstructed ENTIRELY from line density.
+  //    Each pass lays strokes wherever the picture is at least `thresh` dark, at
+  //    its own angle. Light mid-tones receive only the first, airy pass; darker
+  //    values pick up successive passes (cross-hatched), so tone builds up from
+  //    accumulated pencil lines exactly the way a real graphite drawing shades.
+  // A pass lays parallel strokes whose *density* tracks the local darkness: in
+  // each cell the chance of drawing a stroke is proportional to how much darker
+  // the picture is than `thresh`, so lighter values stay open (few lines) and
+  // darker values fill in. Stacking passes at rising thresholds + crossed
+  // angles cross-hatches the shadows. `cover` scales how readily a pass fills.
+  const hatchPass = (thresh, angleAdd, seedOff, press, cover) => {
+    for (let gy = 0; gy < dh; gy += HSEED) {
+      for (let gx0 = 0; gx0 < dw; gx0 += HSEED) {
+        const seed = gx0 * 0.123 + gy * 0.371 + FS + seedOff;
+        const sx = gx0 + (vnoise(seed, 1) - 0.5) * HSEED * 1.7;
+        const sy = gy + (vnoise(seed, 2) - 0.5) * HSEED * 1.7;
+        // contrast-boosted value: lifts lights toward paper while keeping
+        // gradation deep in the shadows (upper edge near 1) so a dark face keeps
+        // internal tonal variation instead of collapsing to a flat black mass.
+        const dd = smoothstep(0.05, 0.92, 1 - Lf(sx, sy) / 255);
+        if (dd <= thresh) continue;
+        // density ∝ darkness: probabilistic gate so tone comes from line spacing
+        const p = (dd - thresh) / (1 - thresh);
+        if (vnoise(seed, 23) > p * cover) continue;
+
+        // Direction: follow the form where there's structure, drift through a
+        // slowly rotating field in flat areas; angleAdd sets this pass's grain.
+        const [hgx, hgy] = grad(sx, sy);
+        let ang;
+        if (Math.hypot(hgx, hgy) > 9) {
+          ang = Math.atan2(hgy, hgx) + Math.PI / 2;
+        } else {
+          ang = vnoise(sx * 0.011, sy * 0.011) * Math.PI * 2;
+        }
+        ang += angleAdd + (vnoise(seed, 11) - 0.5) * 0.6;
+        const dirx = Math.cos(ang), diry = Math.sin(ang);
+        const maxSteps = 4 + Math.floor(dd * 22); // darker -> longer marks fill the mass
+        const step = 2.4;
+        const pts = [[sx, sy]];
+        let x = sx, y = sy;
+        for (let s = 0; s < maxSteps; s++) {
+          x += dirx * step + (vnoise(x * 0.09, y * 0.09 + seed) - 0.5) * 1.2;
+          y += diry * step + (vnoise(x * 0.09 + 4, y * 0.09 + seed) - 0.5) * 1.2;
+          if (x < 0 || x >= dw || y < 0 || y >= dh) break;
+          if (1 - Lf(x, y) / 255 < 0.14) break; // stay inside the darker region
+          pts.push([x, y]);
+        }
+        if (pts.length < 2) continue;
+        pencilPolyline(g, pts, 0.6 + 0.6 * vnoise(seed, 3), press, seed);
       }
-      if (pts.length < 2) continue;
-      pencilPolyline(g, pts, 0.6 + 0.7 * vnoise(seed, 3), 0.06 + 0.2 * d0, seed);
+    }
+  };
+
+  // Layered build-up: low thresholds sketch the whole picture; higher ones only
+  // re-darken the shadows, each from a crossed angle. Opacity rises per layer so
+  // mid-tones read as light hatching while shadow cores build toward solid black.
+  hatchPass(0.06,  0.0,           0,   0.22, 1.5);  // base value across the image
+  hatchPass(0.30,  Math.PI / 2,   53,  0.24, 1.7);  // second grain in the mid-darks
+  hatchPass(0.52,  Math.PI / 4,   131, 0.32, 1.9);  // deepen the shadows
+  hatchPass(0.70, -Math.PI / 4,   219, 0.42, 2.2);  // darkest cores
+
+  // 3) Feature lines: crisp, fine contours pulled from the FULL-resolution image.
+  //    These ride the strong high-frequency edges the blurred tone buffer misses
+  //    (facial features, hairline, jaw, outlines) and are drawn sharply ON TOP of
+  //    the hatching so the subject — LeBron's face — reads like the real frame.
+  const FSEED = 3;
+  const FETH = 26 - dt01 * 13;                       // detail lets finer features through
+  for (let gy = 0; gy < dh; gy += FSEED) {
+    for (let gx0 = 0; gx0 < dw; gx0 += FSEED) {
+      const seed = gx0 * 0.331 + gy * 0.207 + FS + 311;
+      const sx = gx0 + (vnoise(seed, 1) - 0.5) * FSEED;
+      const sy = gy + (vnoise(seed, 2) - 0.5) * FSEED;
+      const [gX, gY] = gradH(sx, sy);
+      const m0 = Math.hypot(gX, gY);
+      if (m0 <= FETH) continue;
+      const maxSteps = 4 + Math.floor(vnoise(seed, 17) * 12);
+      const step = 1.5;
+      const trace = (sign) => {
+        const pts = [];
+        let x = sx, y = sy;
+        let tx = -gY, ty = gX; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+        for (let s = 0; s < maxSteps; s++) {
+          x += sign * tx * step; y += sign * ty * step;
+          if (x < 1 || x >= dw - 1 || y < 1 || y >= dh - 1) break;
+          const [ngx, ngy] = gradH(x, y);
+          if (Math.hypot(ngx, ngy) <= FETH * 0.7) break;   // stop where the edge fades
+          let nx = -ngy, ny = ngx; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+          if (nx * tx + ny * ty < 0) { nx = -nx; ny = -ny; }
+          tx = nx; ty = ny;
+          pts.push([x, y]);
+        }
+        return pts;
+      };
+      const pts = trace(-1).reverse();
+      pts.push([sx, sy]);
+      for (const p of trace(1)) pts.push(p);
+      if (pts.length < 3) continue;
+      const strength = Math.min(1, (m0 - FETH) / 70);
+      pencilPolyline(g, pts, 0.5 + 0.7 * strength, Math.min(0.85, 0.32 + 0.6 * strength), seed);
     }
   }
 
@@ -570,10 +718,12 @@ async function loadSource(id) {
   if (src.type === 'sequence') {
     showLoading();
     const built = [];
+    const imgs = [];
     for (let i = 1; i <= src.count; i++) {
       const n = String(i).padStart(3, '0');
       try {
         const img = await loadImage(`sequences/${src.id}/frame_${n}.${src.ext}`);
+        imgs.push(img);
         built.push(src.raw ? buildRawFrame(img) : buildSketchFrame(img, i));
       } catch (_) {
         /* skip missing frames */
@@ -581,12 +731,16 @@ async function loadSource(id) {
     }
     if (built.length > 0) {
       frames = built;
+      // cache images so the detail slider can rebuild without re-fetching
+      currentSeq = src.raw ? null : { images: imgs };
     } else {
       generateFrames(); // fall back to the basketball if nothing loaded
       currentSourceId = 'basketball';
+      currentSeq = null;
     }
   } else {
     generateFrames();
+    currentSeq = null;
   }
 
   totalFrames = frames.length;
@@ -843,10 +997,10 @@ function drawFlippingPage(img, spineX, pageY, width, height, progress) {
       ctx.drawImage(backPage, s.srcX, 0, s.srcW, height, s.left, s.topY, s.sliceW, s.drawH);
     }
 
-    // shade by tilt: the front darkens as it stands up; the back of the page
-    // starts dark in shadow when vertical and brightens as it lays flat on the
-    // far side (dark -> light through the turn)
-    const shade = front ? 0.80 + 0.20 * s.ca : 0.42 + 0.50 * (-s.ca);
+    // shade by tilt: just a gentle shadow as the sheet stands up, so the back
+    // still reads clearly as lined grid paper (a regular sheet) through the turn
+    // rather than being darkened into a grey slab
+    const shade = front ? 0.84 + 0.16 * s.ca : 0.74 + 0.24 * (-s.ca);
     ctx.fillStyle = `rgba(28,26,20,${Math.max(0, 1 - shade)})`;
     ctx.fillRect(s.left, s.topY, s.sliceW, s.drawH);
 
@@ -905,12 +1059,29 @@ function updateFrameDisplay() {
 
 // UI Controls
 const sourceSelect = document.getElementById('source');
+const detailSlider = document.getElementById('detail');
+const detailVal = document.getElementById('detail-val');
 const speedSlider = document.getElementById('speed');
 const speedVal = document.getElementById('speed-val');
 const renderFpsSlider = document.getElementById('renderFps');
 const renderFpsVal = document.getElementById('renderFps-val');
 const playPauseBtn = document.getElementById('playPause');
 const resetBtn = document.getElementById('reset');
+
+// Rebuild the current sketch sequence's frames at the new detail level. Debounced
+// so dragging the slider doesn't rebuild 100+ frames on every tick.
+let detailRebuildTimer = null;
+function scheduleDetailRebuild() {
+  if (!currentSeq || !currentSeq.images) return; // only sketch sequences use detail
+  clearTimeout(detailRebuildTimer);
+  detailRebuildTimer = setTimeout(() => {
+    showLoading();
+    frames = currentSeq.images.map((img, i) => buildSketchFrame(img, i + 1));
+    totalFrames = frames.length;
+    if (currentFrame >= totalFrames) currentFrame = 0;
+    drawNotebook();
+  }, 200);
+}
 
 function populateSources() {
   if (!sourceSelect) return;
@@ -926,6 +1097,12 @@ function populateSources() {
 
 sourceSelect?.addEventListener('change', (e) => {
   loadSource(e.target.value);
+});
+
+detailSlider?.addEventListener('input', (e) => {
+  detail = parseInt(e.target.value, 10);
+  if (detailVal) detailVal.textContent = String(detail);
+  scheduleDetailRebuild();
 });
 
 speedSlider.addEventListener('input', (e) => {
