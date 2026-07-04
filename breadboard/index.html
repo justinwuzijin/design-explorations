@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Breadboard — WebGL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header id="topbar">
+    <div class="tb-left">
+      <a href="../" id="back">← back</a>
+      <input id="projname" value="untitled circuit" spellcheck="false" />
+    </div>
+    <div class="tb-right">
+      <button id="btn-clear" title="remove everything">clear</button>
+      <button id="btn-fit" title="reset the view">fit</button>
+    </div>
+  </header>
+
+  <div id="app">
+    <aside id="palette">
+      <nav id="cats"></nav>
+      <div id="grid"></div>
+    </aside>
+
+    <div id="stage">
+      <svg id="canvas" tabindex="0">
+        <defs>
+          <radialGradient id="holeG" cx="50%" cy="42%" r="60%">
+            <stop offset="0%" stop-color="#000" />
+            <stop offset="70%" stop-color="#1c1c1c" />
+            <stop offset="100%" stop-color="#3a3a38" />
+          </radialGradient>
+          <linearGradient id="boardG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#fbfaf7" />
+            <stop offset="55%" stop-color="#f1efe9" />
+            <stop offset="100%" stop-color="#e7e4dc" />
+          </linearGradient>
+          <linearGradient id="ravineG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#c9c6bd" />
+            <stop offset="18%" stop-color="#efede6" />
+            <stop offset="82%" stop-color="#efede6" />
+            <stop offset="100%" stop-color="#d3d0c7" />
+          </linearGradient>
+          <linearGradient id="dipG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3c3c40" />
+            <stop offset="12%" stop-color="#26262a" />
+            <stop offset="88%" stop-color="#1b1b1f" />
+            <stop offset="100%" stop-color="#0e0e11" />
+          </linearGradient>
+          <linearGradient id="metalG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#e8eaee" />
+            <stop offset="50%" stop-color="#b9bdc4" />
+            <stop offset="100%" stop-color="#8e939b" />
+          </linearGradient>
+          <linearGradient id="resG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#c3ad82" />
+            <stop offset="16%" stop-color="#efe4c6" />
+            <stop offset="50%" stop-color="#d8c59b" />
+            <stop offset="100%" stop-color="#9a8256" />
+          </linearGradient>
+          <linearGradient id="cylShade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.36" />
+            <stop offset="42%" stop-color="#ffffff" stop-opacity="0" />
+            <stop offset="100%" stop-color="#000000" stop-opacity="0.34" />
+          </linearGradient>
+          <linearGradient id="potG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3f74d6" />
+            <stop offset="50%" stop-color="#2b5bb0" />
+            <stop offset="100%" stop-color="#1c3f80" />
+          </linearGradient>
+          <radialGradient id="ceramicG" cx="40%" cy="34%" r="72%">
+            <stop offset="0%" stop-color="#f0c07e" />
+            <stop offset="55%" stop-color="#d99a45" />
+            <stop offset="100%" stop-color="#a5702a" />
+          </radialGradient>
+          <radialGradient id="elecG" cx="42%" cy="38%" r="68%">
+            <stop offset="0%" stop-color="#6f7278" />
+            <stop offset="45%" stop-color="#3b3d43" />
+            <stop offset="100%" stop-color="#17181c" />
+          </radialGradient>
+          <radialGradient id="screwG" cx="40%" cy="35%" r="72%">
+            <stop offset="0%" stop-color="#f3ead0" />
+            <stop offset="50%" stop-color="#cbb98c" />
+            <stop offset="100%" stop-color="#8f7c4f" />
+          </radialGradient>
+          <radialGradient id="ledRedG" cx="40%" cy="36%" r="66%">
+            <stop offset="0%" stop-color="#ffd2c4" />
+            <stop offset="30%" stop-color="#ff5a52" />
+            <stop offset="76%" stop-color="#d21f22" />
+            <stop offset="100%" stop-color="#8c1417" />
+          </radialGradient>
+          <radialGradient id="ledRedGd" cx="40%" cy="36%" r="66%">
+            <stop offset="0%" stop-color="#c98c86" />
+            <stop offset="55%" stop-color="#9c4a48" />
+            <stop offset="100%" stop-color="#5f2426" />
+          </radialGradient>
+          <radialGradient id="ledGreenG" cx="40%" cy="36%" r="66%">
+            <stop offset="0%" stop-color="#d8ffd0" />
+            <stop offset="32%" stop-color="#57e06a" />
+            <stop offset="78%" stop-color="#1f9e3a" />
+            <stop offset="100%" stop-color="#136128" />
+          </radialGradient>
+          <radialGradient id="ledGreenGd" cx="40%" cy="36%" r="66%">
+            <stop offset="0%" stop-color="#a7c9a4" />
+            <stop offset="55%" stop-color="#4f7e52" />
+            <stop offset="100%" stop-color="#2c481f" />
+          </radialGradient>
+          <radialGradient id="ledYellowG" cx="40%" cy="36%" r="66%">
+            <stop offset="0%" stop-color="#fff6cf" />
+            <stop offset="35%" stop-color="#ffe14a" />
+            <stop offset="80%" stop-color="#e0a81f" />
+            <stop offset="100%" stop-color="#9c7412" />
+          </radialGradient>
+          <radialGradient id="ledYellowGd" cx="40%" cy="36%" r="66%">
+            <stop offset="0%" stop-color="#d9cf9e" />
+            <stop offset="55%" stop-color="#a89448" />
+            <stop offset="100%" stop-color="#66582a" />
+          </radialGradient>
+          <filter id="partShadow" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="2.2" stdDeviation="2.4" flood-color="#000" flood-opacity="0.34" />
+          </filter>
+          <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#000" flood-opacity="0.22" />
+          </filter>
+          <filter id="ledGlow" x="-160%" y="-160%" width="420%" height="420%">
+            <feGaussianBlur stdDeviation="7" />
+          </filter>
+        </defs>
+        <g id="world">
+          <g id="boardL"></g>
+          <g id="partsL"></g>
+          <g id="wiresL"></g>
+          <g id="fxL"></g>
+        </g>
+      </svg>
+      <div id="hint"></div>
+      <div id="inspector" hidden></div>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
