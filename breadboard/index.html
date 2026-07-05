@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=9" />
 </head>
 <body>
 
@@ -19,12 +19,16 @@
     <div class="tb-right">
       <button id="btn-clear" title="remove everything">clear</button>
       <button id="btn-fit" title="reset the view">fit</button>
+      <button id="menu-toggle" title="hide/show parts" aria-label="toggle parts panel">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+          <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+        </svg>
+      </button>
     </div>
   </header>
 
   <div id="app">
     <aside id="palette">
-      <nav id="cats"></nav>
       <div id="grid"></div>
     </aside>
 
@@ -139,11 +143,18 @@
           <g id="fxL"></g>
         </g>
       </svg>
-      <div id="hint"></div>
+      <div id="wirebar">
+        <span class="wb-label">wire color</span>
+        <div class="wb-swatches" id="wb-swatches"></div>
+        <label class="wb-custom" title="custom color">
+          <span class="wb-plus">+</span>
+          <input type="color" id="wb-color" value="#3fa54a" />
+        </label>
+      </div>
       <div id="inspector" hidden></div>
     </div>
   </div>
 
-  <script type="module" src="main.js"></script>
+  <script type="module" src="main.js?v=7"></script>
 </body>
 </html>

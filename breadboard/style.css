@@ -66,9 +66,11 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 .tb-right button:hover { background: rgba(0, 0, 0, 0.1); color: #000; }
+#menu-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 6px 9px; }
+#menu-toggle svg { display: block; }
 
 /* ---- layout ------------------------------------------------------------- */
-#app { flex: 1; display: flex; min-height: 0; }
+#app { flex: 1; display: flex; min-height: 0; overflow: hidden; }
 
 /* ---- palette ------------------------------------------------------------ */
 #palette {
@@ -78,34 +80,21 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  transition: margin-left 0.3s ease, opacity 0.26s ease;
 }
-#cats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid var(--rule);
+/* hamburger toggle slides the parts panel out to the left */
+#app.palette-hidden #palette {
+  margin-left: calc(-1 * clamp(180px, 16.5vw, 250px));
+  opacity: 0;
+  pointer-events: none;
 }
-#cats a {
-  font-size: 0.68rem;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 2px 2px;
-  text-decoration: none;
-  transition: color 0.15s;
-  white-space: nowrap;
-}
-#cats a:hover { color: #333; }
-#cats a.active { color: #000; font-weight: 600; }
-
 #grid {
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 4px;
-  padding: 14px 12px 24px;
+  padding: 14px 10px 24px;
   align-content: start;
 }
 #grid::-webkit-scrollbar { width: 8px; }
@@ -132,17 +121,24 @@ body {
 .cell svg:focus { outline: none; }
 .cell:active { cursor: grabbing; }
 .cell svg { width: 78%; height: 78%; overflow: visible; pointer-events: none; }
+.cell .thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
 .cell.disabled { opacity: 0.45; cursor: default; }
 .cell .tip {
   position: absolute;
   left: 50%;
-  bottom: 4px;
-  transform: translateX(-50%);
-  font-size: 0.6rem;
-  line-height: 1.25;
+  bottom: 0;
+  transform: translate(-50%, 70%);   /* hang the tag below the item */
+  font-size: 0.58rem;
+  line-height: 1.2;
   text-align: center;
   color: rgba(0, 0, 0, 0.72);
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 5px;
   padding: 2px 6px;
   width: max-content;
@@ -150,15 +146,90 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
-  z-index: 3;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  z-index: 6;
 }
 .cell:hover .tip { opacity: 1; }
 
 /* ---- stage -------------------------------------------------------------- */
 #stage { flex: 1; position: relative; min-width: 0; background: var(--bg); }
-#canvas { width: 100%; height: 100%; display: block; outline: none; }
+#canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+/* labels (row letters, column numbers, part text) must not be selectable or
+   catch clicks — otherwise dragging a wire highlights the breadboard text */
+#canvas text { pointer-events: none; user-select: none; -webkit-user-select: none; }
 #canvas.wiring { cursor: crosshair; }
 #canvas.panning { cursor: grabbing; }
+
+/* ---- wire color picker (centered) --------------------------------------- */
+#wirebar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 999px;
+  padding: 7px 16px;
+  user-select: none;
+}
+.wb-label {
+  font-size: 0.64rem;
+  letter-spacing: 0.09em;
+  text-transform: lowercase;
+  color: rgba(0, 0, 0, 0.45);
+}
+.wb-swatches { display: flex; align-items: center; gap: 9px; }
+.wb-sw {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.wb-sw:hover { transform: scale(1.18); }
+.wb-sw.active { transform: scale(1.42); }
+.wb-custom {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.12s;
+}
+.wb-custom:hover { transform: scale(1.15); }
+.wb-custom.active { transform: scale(1.35); }
+.wb-custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+.wb-plus {
+  font-size: 17px;
+  line-height: 1;
+  color: #111;
+  font-weight: 700;
+  pointer-events: none;
+}
 
 #hint {
   position: absolute;
@@ -190,7 +261,7 @@ body {
   font-size: 0.66rem;
   font-weight: 600;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: lowercase;
   color: rgba(0, 0, 0, 0.45);
   margin-bottom: 10px;
 }

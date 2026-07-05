@@ -370,15 +370,6 @@ function drawPCB(g) {
   }
   txt(g, W - 10, H - 8, '555 KIT', 4.6, 'rgba(255,255,255,0.5)', 'end');
 }
-function drawMiniBoard(g) {
-  const W = 96, H = 34;
-  E('rect', { x: 0, y: 0, width: W, height: H, rx: 4, fill: 'url(#boardG)', filter: 'url(#partShadow)' }, g);
-  for (let r = 0; r < 2; r++) for (let c = 0; c < 12; c++) {
-    E('rect', { x: 8 + c * 7, y: 7 + r * 14, width: 3, height: 3, fill: '#222' }, g);
-  }
-  E('line', { x1: 4, y1: 17, x2: W - 4, y2: 17, stroke: 'rgba(0,0,0,0.1)' }, g);
-}
-
 // ---- IC pin name tables --------------------------------------------------------
 
 const HC14 = ['1A', '1Y', '2A', '2Y', '3A', '3Y', 'GND', '4Y', '4A', '5Y', '5A', '6Y', '6A', 'VCC'];
@@ -397,6 +388,7 @@ function dipDef(id, name, half, spanRows, label, icType, names, sub) {
     sim: { type: 'ic', icType },
     props: {},
     draw: (g) => drawDIP(g, half, spanRows, label, sub),
+    img: 'img/ic.png',
     thumb: { x: -12, y: -8, w: (half - 1) * P + 24, h: spanRows * P + 16 },
   };
 }
@@ -404,228 +396,71 @@ function dipDef(id, name, half, spanRows, label, icType, names, sub) {
 // ---- catalog --------------------------------------------------------------------
 
 export const CATS = [
-  ['wiring', 'wiring'],
   ['switches', 'switches'],
   ['resistors', 'resistors'],
-  ['caps', 'capacitors'],
   ['leds', 'leds'],
   ['ics', 'logic ics'],
-  ['micro', 'micro'],
   ['power', 'power'],
-  ['lab', 'lab'],
 ];
 
-const rdef = (id, value, name) => ({
+const rdef = (id, value, name, filter = '') => ({
   id, cat: 'resistors', name, kind: 'board',
   pins: [{ x: 0, y: 0, name: 'a' }, { x: 3, y: 0, name: 'b' }],
   sim: { type: 'resistor' },
   props: { ohms: value },
   draw: (g, inst) => drawAxialResistor(g, 3, inst.props.ohms),
+  img: 'img/resistor.png', filter,          // real photo, recolored per value
   thumb: { x: -4, y: -14, w: 3 * P + 8, h: 28 },
 });
 
-const wdef = (id, name, color, kind = 'wire') => ({
-  id, cat: 'wiring', name, kind: 'wiremode', wireKind: kind, color,
-  draw: (g) => {
-    E('path', { d: 'M 4 40 C 14 6 46 6 56 40', stroke: color, 'stroke-width': kind === 'gator' ? 5 : 3.6, fill: 'none', 'stroke-linecap': 'round', filter: 'url(#partShadow)' }, g);
-    if (kind === 'gator') {
-      E('path', { d: 'M 2 44 l 6 -8 M 58 44 l -6 -8', stroke: 'url(#metalG)', 'stroke-width': 3.6, 'stroke-linecap': 'round' }, g);
-    } else {
-      E('line', { x1: 4, y1: 40, x2: 4, y2: 46, stroke: 'url(#metalG)', 'stroke-width': 2.4 }, g);
-      E('line', { x1: 56, y1: 40, x2: 56, y2: 46, stroke: 'url(#metalG)', 'stroke-width': 2.4 }, g);
-    }
-  },
-  thumb: { x: 0, y: 0, w: 60, h: 50 },
-});
-
-const ledDef = (id, color, name) => ({
+const ledDef = (id, color, name, filter = '') => ({
   id, cat: 'leds', name, kind: 'board',
   pins: [{ x: 0, y: 0, name: 'a' }, { x: 1, y: 0, name: 'k' }],
   sim: { type: 'led' },
   props: { color },
   draw: drawLED,
+  img: 'img/led.png', filter,               // same LED photo, hue-shifted per color
   thumb: { x: -10, y: -12, w: P + 20, h: 30 },
 });
 
 export const CATALOG = [
-  // --- wiring
-  {
-    id: 'breadboard', cat: 'wiring', name: 'breadboard (already on canvas)', kind: 'disabled',
-    draw: drawMiniBoard, thumb: { x: 0, y: 0, w: 96, h: 34 },
-  },
-  wdef('wire-jumper', 'jumper wire', '#3fa54a'),
-  wdef('wire-solid', 'solid-core wire #22 AWG', '#e8b53a'),
-  wdef('wire-red', 'red hook-up wire', '#d43c3c'),
-  wdef('wire-black', 'black hook-up wire', '#26262a'),
-  wdef('wire-gator', 'banana \u2192 alligator lead', '#d43c3c', 'gator'),
-  {
-    id: 'batsnap', cat: 'wiring', name: 'battery snap (9V)', kind: 'board',
-    pins: [{ x: 0, y: 0, name: 'pos' }, { x: 1, y: 0, name: 'neg' }],
-    sim: { type: 'source', volts: 9 }, props: {},
-    draw: drawBatterySnap, thumb: { x: -16, y: -44, w: P + 32, h: 54 },
-  },
-  {
-    id: 'heatshrink', cat: 'wiring', name: 'heat shrink tubing', kind: 'free', size: { w: 3 * P, h: 12 },
-    sim: { type: 'deco' }, props: {},
-    draw: (g) => drawHeatShrink(E('g', { transform: 'translate(0,6)' }, g)),
-    thumb: { x: -2, y: -3, w: 3 * P + 4, h: 18 },
-  },
-  {
-    id: 'pcb', cat: 'wiring', name: 'PCB (soldering workshop)', kind: 'free', size: { w: 120, h: 84 },
-    sim: { type: 'deco' }, props: {}, draw: drawPCB, thumb: { x: -4, y: -4, w: 128, h: 92 },
-  },
-
   // --- switches
   {
-    id: 'button', cat: 'switches', name: 'pushbutton (4-pin tactile)', kind: 'board',
+    id: 'button', cat: 'switches', name: 'push button', kind: 'board',
     pins: [{ x: 0, y: 0, name: 'a1' }, { x: 2, y: 0, name: 'a2' }, { x: 0, y: 3, name: 'b1' }, { x: 2, y: 3, name: 'b2' }],
     sim: { type: 'button' }, props: {},
-    draw: drawTactile, thumb: { x: -8, y: -4, w: 2 * P + 16, h: 3 * P + 8 },
-  },
-  {
-    id: 'spst', cat: 'switches', name: 'SPST switch', kind: 'board',
-    pins: [{ x: 0, y: 0, name: 'a' }, { x: 2, y: 0, name: 'b' }],
-    sim: { type: 'spst' }, props: { closed: false },
-    draw: drawSPST, thumb: { x: -8, y: -22, w: 2 * P + 16, h: 32 },
-  },
-  {
-    id: 'spdt', cat: 'switches', name: 'SPDT switch', kind: 'board',
-    pins: [{ x: 0, y: 0, name: 'l' }, { x: 1, y: 0, name: 'c' }, { x: 2, y: 0, name: 'r' }],
-    sim: { type: 'spdt' }, props: { side: 'l' },
-    draw: drawSPDT, thumb: { x: -8, y: -28, w: 2 * P + 16, h: 38 },
+    draw: drawTactile, img: 'img/button.png', thumb: { x: -8, y: -4, w: 2 * P + 16, h: 3 * P + 8 },
   },
 
-  // --- resistors
-  rdef('r10k', 10000, '10 k\u03A9 resistor'),
-  {
-    id: 'pot10k', cat: 'resistors', name: '10 k\u03A9 potentiometer', kind: 'board',
-    pins: [{ x: 0, y: 0, name: 'a' }, { x: 1, y: 0, name: 'w' }, { x: 2, y: 0, name: 'b' }],
-    sim: { type: 'pot', ohms: 10000 }, props: { t: 0.5 },
-    draw: drawPot, thumb: { x: -9, y: -2 * P - 10, w: 2 * P + 18, h: 2 * P + 18 },
-  },
-  rdef('r5k1', 5100, '5.1 k\u03A9 resistor'),
-  rdef('r2k', 2000, '2 k\u03A9 resistor'),
-  rdef('r1k', 1000, '1 k\u03A9 resistor'),
-  rdef('r536', 536, '536 \u03A9 resistor'),
-  rdef('r510', 510, '510 \u03A9 resistor'),
-  rdef('r200', 200, '200 \u03A9 resistor'),
-  {
-    id: 'r0', cat: 'resistors', name: '0 \u03A9 SMD resistor', kind: 'board',
-    pins: [{ x: 0, y: 0, name: 'a' }, { x: 1, y: 0, name: 'b' }],
-    sim: { type: 'zero' }, props: {},
-    draw: drawSMD0, thumb: { x: -4, y: -10, w: P + 8, h: 20 },
-  },
+  // --- resistors (same photo, recolored per value so each reads distinctly)
+  rdef('r10k', 10000, '10 k\u03A9'),
+  rdef('r5k1', 5100, '5.1 k\u03A9', 'hue-rotate(200deg) saturate(1.25)'),
+  rdef('r2k', 2000, '2 k\u03A9', 'hue-rotate(95deg) saturate(1.1)'),
+  rdef('r1k', 1000, '1 k\u03A9', 'hue-rotate(300deg) saturate(1.15)'),
+  rdef('r536', 536, '536 \u03A9', 'hue-rotate(30deg) saturate(1.2)'),
+  rdef('r510', 510, '510 \u03A9', 'hue-rotate(160deg) saturate(1.15)'),
+  rdef('r200', 200, '200 \u03A9', 'hue-rotate(245deg) saturate(1.2)'),
 
-  // --- caps
-  {
-    id: 'c10n', cat: 'caps', name: '10 nF ceramic capacitor', kind: 'board',
-    pins: [{ x: 0, y: 0, name: 'a' }, { x: 1, y: 0, name: 'b' }],
-    sim: { type: 'cap', farads: 10e-9 }, props: {},
-    draw: drawCeramic, thumb: { x: -8, y: -12, w: P + 16, h: 24 },
-  },
-  {
-    id: 'c120u', cat: 'caps', name: '120 \u00B5F electrolytic capacitor', kind: 'board',
-    pins: [{ x: 0, y: 0, name: 'pos' }, { x: 1, y: 0, name: 'neg' }],
-    sim: { type: 'cap', farads: 120e-6 }, props: {},
-    draw: drawElectrolytic, thumb: { x: -8, y: -16, w: P + 16, h: 28 },
-  },
-
-  // --- leds
-  ledDef('led-red', 'red', 'red LED'),
-  ledDef('led-green', 'green', 'green LED'),
-  ledDef('led-yellow', 'yellow', 'yellow LED'),
+  // --- leds (same photo, hue-shifted per colour)
+  ledDef('led-red', 'red', 'red'),
+  ledDef('led-green', 'green', 'green', 'hue-rotate(108deg) saturate(2) brightness(1.3)'),
+  ledDef('led-yellow', 'yellow', 'yellow', 'hue-rotate(62deg) saturate(2) brightness(1.45)'),
 
   // --- ics
-  dipDef('hc14', 'SN74HC14N hex schmitt inverter', 7, 3, 'SN74HC14N', 'hc14', HC14, 'hex inverter'),
-  dipDef('hc08', 'SN74HC08N quad AND', 7, 3, 'SN74HC08N', 'hc08', HC08, 'quad AND'),
-  dipDef('hc32', 'SN74HC32N quad OR', 7, 3, 'SN74HC32N', 'hc32', HC32, 'quad OR'),
-  dipDef('hc283', 'CD74HC283E 4-bit full adder', 8, 3, 'CD74HC283E', 'hc283', HC283, '4-bit adder'),
-  dipDef('hc153', 'SN74HC153N dual 4:1 mux', 8, 3, 'SN74HC153N', 'hc153', HC153, 'dual 4:1 mux'),
-  dipDef('cd4013', 'CD4013BE dual D flip-flop', 7, 3, 'CD4013BE', 'cd4013', CD4013, 'dual D-FF'),
+  dipDef('hc14', 'SN74HC14N inverter', 7, 3, 'SN74HC14N', 'hc14', HC14, 'hex inverter'),
+  dipDef('hc08', 'SN74HC08N AND', 7, 3, 'SN74HC08N', 'hc08', HC08, 'quad AND'),
+  dipDef('hc32', 'SN74HC32N OR', 7, 3, 'SN74HC32N', 'hc32', HC32, 'quad OR'),
+  dipDef('hc283', 'CD74HC283E adder', 8, 3, 'CD74HC283E', 'hc283', HC283, '4-bit adder'),
+  dipDef('hc153', 'SN74HC153N mux', 8, 3, 'SN74HC153N', 'hc153', HC153, 'dual 4:1 mux'),
+  dipDef('cd4013', 'CD4013BE flip-flop', 7, 3, 'CD4013BE', 'cd4013', CD4013, 'dual D-FF'),
   dipDef('ne555', 'NE555P timer', 4, 3, 'NE555P', 'ne555', NE555, 'timer'),
 
-  // --- micro
-  {
-    id: 'arduino', cat: 'micro', name: 'Arduino Uno', kind: 'free', size: { w: 214, h: 152 },
-    ports: [
-      { x: 84, y: 140, name: '5V', volts: 5 },
-      { x: 100, y: 140, name: '3V3', volts: 3.3 },
-      { x: 118, y: 140, name: 'GND', volts: 0 },
-      { x: 136, y: 140, name: 'GND2', volts: 0 },
-    ],
-    sim: { type: 'ports' }, props: {},
-    draw: drawArduino, thumb: { x: -14, y: -4, w: 232, h: 162 },
-  },
-  (() => {
-    const d = dipDef('mega328', 'ATmega328P (DIP-28)', 14, 6, 'ATMEGA328P-PU', 'inert', MEGA328, 'AVR MCU');
-    d.cat = 'micro';
-    return d;
-  })(),
-  {
-    id: 'usb', cat: 'micro', name: 'USB cable', kind: 'free', size: { w: 70, h: 70 },
-    sim: { type: 'deco' }, props: {}, draw: drawUSB, thumb: { x: 0, y: 0, w: 72, h: 70 },
-  },
-
-  // --- power
+  // --- power (single source)
   {
     id: 'pow5', cat: 'power', name: '5 V power source', kind: 'board',
     pins: [{ x: 0, y: 0, name: 'pos' }, { x: 1, y: 0, name: 'neg' }],
     sim: { type: 'source', volts: 5 }, props: {},
     draw: draw5V, thumb: { x: -12, y: -30, w: P + 24, h: 40 },
-  },
-  {
-    id: 'supply', cat: 'power', name: 'DC lab power supply', kind: 'free', size: { w: 190, h: 120 },
-    ports: [
-      { x: 46, y: 88, name: 'pos', srcPos: true },
-      { x: 86, y: 88, name: 'neg', volts: 0 },
-    ],
-    sim: { type: 'supply' }, props: { volts: 5 },
-    draw: drawSupply, thumb: { x: -6, y: -4, w: 202, h: 130 },
-  },
-  {
-    id: 'bat9', cat: 'power', name: '9 V battery', kind: 'free', size: { w: 92, h: 138 },
-    ports: [
-      { x: 26, y: 14, name: 'pos', srcPos: true },
-      { x: 66, y: 14, name: 'neg', volts: 0 },
-    ],
-    sim: { type: 'supply' }, props: { volts: 9 },
-    draw: drawBattery9V, thumb: { x: -4, y: -6, w: 100, h: 148 },
-  },
-
-  // --- lab
-  {
-    id: 'dmm', cat: 'lab', name: 'digital multimeter (DMM)', kind: 'free', size: { w: 130, h: 190 },
-    ports: [
-      { x: 34, y: 160, name: 'com' },
-      { x: 96, y: 160, name: 'vin' },
-    ],
-    sim: { type: 'dmm' }, props: {},
-    draw: drawDMM, thumb: { x: -4, y: -4, w: 138, h: 198 },
-  },
-  {
-    id: 'probes', cat: 'lab', name: 'DMM probes', kind: 'free', size: { w: 64, h: 68 },
-    sim: { type: 'deco' }, props: {}, draw: drawProbes, thumb: { x: 0, y: 0, w: 66, h: 70 },
-  },
-  {
-    id: 'funcgen', cat: 'lab', name: 'arbitrary function generator', kind: 'free', size: { w: 190, h: 110 },
-    ports: [
-      { x: 132, y: 84, name: 'out' },
-      { x: 164, y: 84, name: 'gnd', volts: 0 },
-    ],
-    sim: { type: 'funcgen' }, props: { hz: 2 },
-    draw: drawFuncGen, thumb: { x: -6, y: -4, w: 202, h: 120 },
-  },
-  {
-    id: 'iron', cat: 'lab', name: 'soldering iron', kind: 'free', size: { w: 76, h: 70 },
-    sim: { type: 'deco' }, props: {}, draw: drawIron, thumb: { x: 0, y: 0, w: 78, h: 72 },
-  },
-  {
-    id: 'strippers', cat: 'lab', name: 'wire strippers', kind: 'free', size: { w: 64, h: 66 },
-    sim: { type: 'deco' }, props: {}, draw: drawStrippers, thumb: { x: 4, y: 2, w: 58, h: 64 },
-  },
-  {
-    id: 'cutters', cat: 'lab', name: 'flush cutters', kind: 'free', size: { w: 64, h: 64 },
-    sim: { type: 'deco' }, props: {}, draw: drawCutters, thumb: { x: 12, y: 2, w: 46, h: 62 },
   },
 ];
 

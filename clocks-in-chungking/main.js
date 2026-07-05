@@ -85,7 +85,7 @@ function colon(px, color) {
   const c = document.createElement('div');
   c.textContent = ':';
   c.style.cssText =
-    `align-self:center;font-family:'Oswald',sans-serif;font-weight:700;` +
+    `align-self:center;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:700;` +
     `font-size:${px}px;line-height:1;color:${color};padding:0 2px;`;
   return c;
 }
@@ -281,7 +281,6 @@ function makeAnalog(offset, size = 150) {
 // ----------------------------------------------------------------------------
 // Build the wall.
 // ----------------------------------------------------------------------------
-const wall = document.getElementById('wall');
 const board = document.getElementById('clocks');
 
 // City offsets (minutes from UTC) — June-ish, exactness isn't the point.
@@ -321,16 +320,8 @@ function frameLoop() {
 requestAnimationFrame(frameLoop);
 
 // ----------------------------------------------------------------------------
-// Controls: grade toggle, speed, now.
+// Controls: speed, now.
 // ----------------------------------------------------------------------------
-const gradeSeg = document.getElementById('grade-seg');
-gradeSeg.addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-grade]');
-  if (!btn) return;
-  wall.dataset.grade = btn.dataset.grade;
-  gradeSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
-});
-
 const speedSeg = document.getElementById('speed-seg');
 speedSeg.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-speed]');

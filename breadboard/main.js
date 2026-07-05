@@ -1,7 +1,7 @@
 // Breadboard simulator: palette, placement, wiring, inspector, sim loop.
 
 import { P, E, BODY, buildBoard, nearestHole, HOLE_BY_ID, baseNetOf } from './board.js';
-import { CATALOG, CATS, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js';
+import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js';
 import { runSim, portNode } from './sim.js';
 
 const svg = document.getElementById('canvas');
@@ -18,7 +18,7 @@ const inspector = document.getElementById('inspector');
 const state = { parts: [], wires: [], uid: 1 };
 let view = { x: 60, y: 60, k: 1 };
 let sel = null;                    // {kind:'part', inst} | {kind:'wire', wire}
-let wireMode = null;               // {color, kind, from?}
+let pendingWire = null;            // a floating wire waiting for its second hole
 let dragging = null;               // active pointer interaction
 const occ = new Map();             // holeId -> occupant uid ('w'+i for wires)
 
@@ -30,8 +30,12 @@ function applyView() {
 }
 function fitView() {
   const w = stage.clientWidth, h = stage.clientHeight;
-  const k = Math.min((w - 90) / BODY.w, (h - 260) / BODY.h, 1.15);
-  view = { k, x: (w - BODY.w * k) / 2 - BODY.x * k, y: 54, };
+  const k = Math.min((w - 80) / BODY.w, (h - 130) / BODY.h, 1.2);
+  view = {
+    k,
+    x: (w - BODY.w * k) / 2 - BODY.x * k,
+    y: (h - BODY.h * k) / 2 - BODY.y * k,   // vertically centered in the canvas
+  };
   applyView();
 }
 function toWorld(e) {
@@ -384,21 +388,42 @@ function rotateSelected() {
   saveSoon();
 }
 
-// ---------------------------------------------------------------- palette
-const catsNav = document.getElementById('cats');
-const grid = document.getElementById('grid');
-let activeCat = 'wiring';
+// ---------------------------------------------------------------- wire color
+let currentWireColor = '#3fa54a';
+const wbSwatches = document.getElementById('wb-swatches');
+const wbColorInput = document.getElementById('wb-color');
+const wbCustom = wbColorInput.closest('.wb-custom');
 
-function buildCats() {
-  catsNav.innerHTML = '';
-  for (const [id, label] of CATS) {
-    const a = document.createElement('a');
-    a.textContent = label;
-    a.className = id === activeCat ? 'active' : '';
-    a.onclick = () => { activeCat = id; buildCats(); buildGrid(); };
-    catsNav.appendChild(a);
+function applyWireColor(color, fromCustom) {
+  currentWireColor = color;
+  [...wbSwatches.children].forEach((sw) => sw.classList.toggle('active', !fromCustom && sw.dataset.color === color));
+  wbCustom.classList.toggle('active', !!fromCustom);
+  if (pendingWire) { pendingWire.color = color; }
+  if (sel && sel.kind === 'wire') {
+    sel.wire.color = color;
+    renderWire(sel.wire);
+    refreshSelBox();
+    if (!inspector.hidden) buildInspector();
+    saveSoon();
   }
 }
+function buildWireBar() {
+  wbSwatches.innerHTML = '';
+  for (const [color, name] of WIRE_COLORS) {
+    const sw = document.createElement('div');
+    sw.className = 'wb-sw';
+    sw.style.background = color;
+    sw.dataset.color = color;
+    sw.title = name;
+    sw.addEventListener('click', () => applyWireColor(color, false));
+    wbSwatches.appendChild(sw);
+  }
+  wbColorInput.addEventListener('input', () => applyWireColor(wbColorInput.value, true));
+  applyWireColor(currentWireColor, false);
+}
+
+// ---------------------------------------------------------------- palette
+const grid = document.getElementById('grid');
 
 function thumbSVG(def) {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -409,54 +434,106 @@ function thumbSVG(def) {
   return s;
 }
 
+// Parts with a real photo (`img`) show it in the tray; `filter` recolors it
+// (hue-shift) so colour/value variants read distinctly from the same image.
+function buildThumb(def) {
+  if (def.img) {
+    const im = document.createElement('img');
+    im.className = 'thumb-img';
+    im.src = def.img;
+    im.alt = def.name;
+    im.draggable = false;
+    if (def.filter) im.style.filter = def.filter;
+    return im;
+  }
+  return thumbSVG(def);
+}
+
 function buildGrid() {
   grid.innerHTML = '';
   for (const def of CATALOG) {
-    if (def.cat !== activeCat) continue;
     const cell = document.createElement('div');
     cell.className = 'cell' + (def.kind === 'disabled' ? ' disabled' : '');
-    cell.appendChild(thumbSVG(def));
+    cell.appendChild(buildThumb(def));
     const tip = document.createElement('div');
     tip.className = 'tip';
     tip.textContent = def.name;
     cell.appendChild(tip);
-    if (def.kind === 'wiremode') {
-      cell.addEventListener('pointerdown', (e) => { e.preventDefault(); enterWireMode(def); });
-    } else if (def.kind !== 'disabled') {
-      cell.addEventListener('pointerdown', (e) => startPaletteDrag(e, def));
-    }
+    cell.addEventListener('pointerdown', (e) => startPaletteDrag(e, def));
     grid.appendChild(cell);
   }
 }
 
-// ---------------------------------------------------------------- wire mode
-function enterWireMode(def) {
-  wireMode = { color: def.color, kind: def.wireKind, from: null };
-  svg.classList.add('wiring');
-  setHint('wire: click a hole (or an instrument port), then a second one. esc to stop.');
+// ---------------------------------------------------------------- floating wire
+// Click a hole to drop one wire end there; the wire floats to the cursor until
+// you click a second hole (or an instrument port), which drops the other end.
+let fxTemp = [];
+function clearFx() { for (const f of fxTemp) f.remove(); fxTemp = []; }
+function markNode(n) {
+  fxTemp.push(E('circle', { cx: n.x, cy: n.y, r: 6, fill: 'none', stroke: '#2f6fed', 'stroke-width': 2, 'pointer-events': 'none' }, fxL));
 }
-function exitWireMode() {
-  wireMode = null;
+function drawWirePreview(from, to, color) {
+  fxTemp.push(E('path', {
+    d: wirePath(from.x, from.y, to.x, to.y),
+    stroke: color, 'stroke-width': 3, fill: 'none', opacity: 0.6, 'stroke-linecap': 'round', 'pointer-events': 'none',
+  }, fxL));
+}
+
+// ports on free instruments (supply, battery) — checked before part drag
+function portAt(wx, wy) {
+  for (const inst of state.parts) {
+    if (!inst.def.ports) continue;
+    for (const port of inst.def.ports) {
+      const px = inst.x + port.x, py = inst.y + port.y;
+      if (Math.hypot(px - wx, py - wy) < 11) {
+        return { node: portNode(inst, port.name), port: [inst.uid, port.name], x: px, y: py };
+      }
+    }
+  }
+  return null;
+}
+
+function startWire(n) {
+  select(null);
+  pendingWire = {
+    fromNode: n.node,
+    from: n.hole ? { hole: n.hole } : { port: n.port },
+    x: n.x, y: n.y,
+    color: currentWireColor,
+  };
+  svg.classList.add('wiring');
+  clearFx();
+  markNode(n);
+  setHint('wire end dropped \u2014 click another hole to place the other end \u00b7 esc to cancel');
+  document.addEventListener('pointermove', onWireHover);
+}
+function onWireHover(ev) {
+  if (!pendingWire) return;
+  const w = toWorld(ev);
+  clearFx();
+  markNode({ x: pendingWire.x, y: pendingWire.y });
+  const n = nodeAt(w.x, w.y);
+  if (n) markNode(n);
+  drawWirePreview(pendingWire, n ? { x: n.x, y: n.y } : w, pendingWire.color);
+}
+function cancelWire() {
+  pendingWire = null;
   svg.classList.remove('wiring');
   clearFx();
   setHint('');
+  document.removeEventListener('pointermove', onWireHover);
 }
-let fxTemp = [];
-function clearFx() { for (const f of fxTemp) f.remove(); fxTemp = []; }
-function drawWirePreview(from, to) {
-  clearFx();
-  fxTemp.push(E('path', {
-    d: wirePath(from.x, from.y, to.x, to.y),
-    stroke: wireMode.color, 'stroke-width': 3, fill: 'none', opacity: 0.55, 'stroke-linecap': 'round', 'pointer-events': 'none',
-  }, fxL));
-}
-function markNode(n) {
-  fxTemp.push(E('circle', { cx: n.x, cy: n.y, r: 6, fill: 'none', stroke: '#2f6fed', 'stroke-width': 2, 'pointer-events': 'none' }, fxL));
+function finishWire(n) {
+  if (n && n.node !== pendingWire.fromNode) {
+    addWire(pendingWire.from, n.hole ? { hole: n.hole } : { port: n.port }, pendingWire.color, 'wire');
+  }
+  cancelWire();
 }
 
 // ---------------------------------------------------------------- palette drag placement
 function startPaletteDrag(e, def) {
   e.preventDefault();
+  if (pendingWire) cancelWire();
   const ghost = E('g', { opacity: 0.8, 'pointer-events': 'none' }, fxL);
   const inst = { props: { ...(def.props || {}) }, def, rt: {} };
   def.draw(ghost, inst);
@@ -504,30 +581,17 @@ function startPaletteDrag(e, def) {
 svg.addEventListener('pointerdown', (e) => {
   const w = toWorld(e);
 
-  // wiring mode
-  if (wireMode) {
-    const n = nodeAt(w.x, w.y);
-    if (!n) {
-      if (!wireMode.from) exitWireMode();
-      else { wireMode.from = null; clearFx(); }
-      return;
-    }
-    if (!wireMode.from) {
-      wireMode.from = n;
-      markNode(n);
-    } else if (n.node !== wireMode.from.node || n.hole !== wireMode.from.hole) {
-      addWire(
-        wireMode.from.hole ? { hole: wireMode.from.hole } : { port: wireMode.from.port },
-        n.hole ? { hole: n.hole } : { port: n.port },
-        wireMode.color, wireMode.kind,
-      );
-      wireMode.from = null;
-      clearFx();
-    }
+  // a floating wire is waiting for its second end
+  if (pendingWire) {
+    finishWire(nodeAt(w.x, w.y));
     return;
   }
 
-  // part hit?
+  // an instrument port starts a wire (checked before dragging the instrument)
+  const port = portAt(w.x, w.y);
+  if (port) { startWire(port); return; }
+
+  // part hit -> drag it
   let g = e.target;
   while (g && g !== svg && !(g.classList && g.classList.contains('part'))) g = g.parentNode;
   if (g && g !== svg) {
@@ -535,14 +599,11 @@ svg.addEventListener('pointerdown', (e) => {
     if (inst) { beginPartDrag(e, inst, w); return; }
   }
 
-  // quick-wire from a hole
-  const n = nodeAt(w.x, w.y);
-  if (n && n.hole && !occ.has(n.hole)) {
-    beginQuickWire(e, n);
-    return;
-  }
+  // a breadboard hole -> drop the first end of a new wire
+  const h = nearestHole(w.x, w.y, P * 0.55);
+  if (h) { startWire({ node: baseNetOf(h.id), hole: h.id, x: h.x, y: h.y }); return; }
 
-  // else: pan
+  // empty space -> pan + deselect
   beginPan(e);
   select(null);
 });
@@ -559,34 +620,6 @@ function beginPan(e) {
     svg.classList.remove('panning');
     document.removeEventListener('pointermove', move);
     document.removeEventListener('pointerup', up);
-  };
-  document.addEventListener('pointermove', move);
-  document.addEventListener('pointerup', up);
-}
-
-function beginQuickWire(e, from) {
-  const railColor = from.hole && from.hole.includes('+') ? '#d43c3c'
-    : from.hole && from.hole.includes('-') ? '#26262a' : '#3fa54a';
-  wireMode = { color: railColor, kind: 'wire', from, quick: true };
-  markNode(from);
-  const move = (ev) => {
-    const w = toWorld(ev);
-    drawWirePreview(from, w);
-  };
-  const up = (ev) => {
-    document.removeEventListener('pointermove', move);
-    document.removeEventListener('pointerup', up);
-    const w = toWorld(ev);
-    const n = nodeAt(w.x, w.y);
-    if (n && (n.hole !== from.hole || n.port)) {
-      addWire(
-        { hole: from.hole },
-        n.hole ? { hole: n.hole } : { port: n.port },
-        railColor, 'wire',
-      );
-    }
-    wireMode = null;
-    clearFx();
   };
   document.addEventListener('pointermove', move);
   document.addEventListener('pointerup', up);
@@ -669,14 +702,14 @@ svg.addEventListener('wheel', (e) => {
 
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-  if (e.key === 'Escape') { exitWireMode(); select(null); }
+  if (e.key === 'Escape') { cancelWire(); select(null); }
   if (e.key === 'r' || e.key === 'R') rotateSelected();
   if (e.key === 'Delete' || e.key === 'Backspace') removeSelected();
 });
 
 // ---------------------------------------------------------------- hints
 function setHint(s) {
-  hintEl.textContent = s || 'drag parts from the left \u00B7 drag hole to hole to wire \u00B7 scroll to zoom \u00B7 r rotates \u00B7 click a part to edit it';
+  if (hintEl) hintEl.textContent = s || '';
 }
 
 // ---------------------------------------------------------------- persistence
@@ -729,6 +762,10 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   save();
 });
 document.getElementById('btn-fit').addEventListener('click', fitView);
+document.getElementById('menu-toggle').addEventListener('click', () => {
+  document.getElementById('app').classList.toggle('palette-hidden');
+  setTimeout(fitView, 320);   // recenter once the panel finishes sliding
+});
 document.getElementById('projname').addEventListener('change', saveSoon);
 
 // ---------------------------------------------------------------- sim + dynamic render loop
@@ -788,7 +825,7 @@ function frame(ts) {
 }
 
 // ---------------------------------------------------------------- boot
-buildCats();
+buildWireBar();
 buildGrid();
 setHint('');
 load();
