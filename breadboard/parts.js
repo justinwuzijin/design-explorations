@@ -199,23 +199,31 @@ function drawSMD0(g) {
 }
 
 function drawBatterySnap(g) {
-  lead(g, 0, 0, 0, 4);
-  lead(g, P, 0, P, 4);
-  E('line', { x1: 0, y1: 2, x2: -6, y2: -16, stroke: '#c33', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, g);
-  E('line', { x1: P, y1: 2, x2: P + 6, y2: -16, stroke: '#222', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, g);
-  E('rect', { x: -12, y: -34, width: P + 24, height: 20, rx: 6, fill: '#17181c', filter: 'url(#partShadow)' }, g);
-  E('circle', { cx: -1, cy: -24, r: 4.6, fill: 'none', stroke: 'url(#metalG)', 'stroke-width': 2.2 }, g);
-  E('circle', { cx: P + 1, cy: -24, r: 3.2, fill: 'url(#metalG)' }, g);
-  txt(g, P / 2, -37.5, '9V', 4.8, 'rgba(0,0,0,0.55)');
+  lead(g, 0, 0, 0, 4, 1.7);
+  lead(g, P, 0, P, 4, 1.7);
+  // insulated wires up to the connector
+  E('path', { d: `M 0 2 C -4 -8 -6 -12 -6 -18`, stroke: '#c33', 'stroke-width': 2.6, fill: 'none', 'stroke-linecap': 'round' }, g);
+  E('path', { d: `M ${P} 2 C ${P + 4} -8 ${P + 6} -12 ${P + 6} -18`, stroke: '#222', 'stroke-width': 2.6, fill: 'none', 'stroke-linecap': 'round' }, g);
+  // moulded snap connector body
+  E('rect', { x: -12, y: -35, width: P + 24, height: 21, rx: 5, fill: '#1a1b20' }, g);
+  E('rect', { x: -12, y: -35, width: P + 24, height: 5, rx: 3, fill: 'rgba(255,255,255,0.14)' }, g);
+  E('circle', { cx: -1, cy: -24.5, r: 4.6, fill: '#26272c', stroke: 'url(#metalG)', 'stroke-width': 2.2 }, g);  // + ring terminal
+  E('circle', { cx: P + 1, cy: -24.5, r: 3.4, fill: 'url(#metalG)' }, g);                                       // - button terminal
+  txt(g, P / 2, -38.5, '9V snap', 4.4, 'rgba(0,0,0,0.5)');
 }
 
 function draw5V(g) {
-  lead(g, 0, 0, 0, 4); lead(g, P, 0, P, 4);
-  E('rect', { x: -8, y: -26, width: P + 16, height: 24, rx: 3.5, fill: '#b6322e', filter: 'url(#partShadow)' }, g);
-  E('rect', { x: -8, y: -26, width: P + 16, height: 4, rx: 2, fill: 'rgba(255,255,255,0.25)' }, g);
-  txt(g, P / 2, -13, '5V', 7, '#fff', 'middle', 700);
-  txt(g, 0, -2.5, '+', 5.4, '#ffd9d9', 'middle', 700);
-  txt(g, P, -2.5, '\u2212', 5.4, '#d9e6ff', 'middle', 700);
+  lead(g, 0, 0, 0, 4, 1.7); lead(g, P, 0, P, 4, 1.7);
+  // small regulated power module
+  E('rect', { x: -9, y: -28, width: P + 18, height: 26, rx: 3, fill: '#8f2420' }, g);
+  E('rect', { x: -9, y: -28, width: P + 18, height: 26, rx: 3, fill: 'url(#cylShade)', opacity: 0.5 }, g);
+  E('rect', { x: -9, y: -28, width: P + 18, height: 4.5, rx: 2, fill: 'rgba(255,255,255,0.22)' }, g);
+  txt(g, P / 2, -15, '5V', 7, '#fff', 'middle', 700);
+  // solder pads for the two pins
+  E('circle', { cx: 0, cy: -5, r: 3, fill: '#c9a24a' }, g);
+  E('circle', { cx: P, cy: -5, r: 3, fill: '#c9a24a' }, g);
+  txt(g, 0, -3.2, '+', 4.6, '#5a2a10', 'middle', 800);
+  txt(g, P, -3.2, '\u2212', 4.6, '#5a2a10', 'middle', 800);
 }
 
 // ---- free (off-board) parts ---------------------------------------------------
@@ -303,39 +311,54 @@ function drawDMM(g, inst) {
   inst._dyn = { disp };
 }
 
-// small decorative tools
+// small tools
 function drawIron(g) {
-  E('line', { x1: 6, y1: 60, x2: 30, y2: 22, stroke: 'url(#metalG)', 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
-  E('line', { x1: 2, y1: 66, x2: 10, y2: 54, stroke: '#c9c9c9', 'stroke-width': 7, 'stroke-linecap': 'round' }, g);
-  E('rect', { x: 24, y: 4, width: 46, height: 26, rx: 12, transform: 'rotate(32 24 4)', fill: '#2b5fb8', filter: 'url(#partShadow)' }, g);
+  // blue barrel handle
+  E('rect', { x: 26, y: 2, width: 48, height: 22, rx: 11, transform: 'rotate(34 26 2)', fill: '#2b5fb8' }, g);
+  E('rect', { x: 26, y: 3, width: 48, height: 7, rx: 3.5, transform: 'rotate(34 26 2)', fill: 'rgba(255,255,255,0.28)' }, g);
+  // metal ferrule + shaft
+  E('line', { x1: 18, y1: 46, x2: 36, y2: 22, stroke: 'url(#metalG)', 'stroke-width': 8, 'stroke-linecap': 'round' }, g);
+  E('line', { x1: 6, y1: 62, x2: 20, y2: 44, stroke: 'url(#metalG)', 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
+  // copper tip
+  E('path', { d: 'M 2 67 L 12 54 L 9 63 Z', fill: '#b5773a' }, g);
 }
 function drawStrippers(g) {
-  E('path', { d: 'M 20 8 C 34 22 40 30 38 40 L 30 36 C 26 28 18 18 12 14 Z', fill: '#d43c3c', filter: 'url(#partShadow)' }, g);
-  E('path', { d: 'M 44 8 C 30 22 24 30 26 40 L 34 36 C 38 28 46 18 52 14 Z', fill: '#d43c3c' }, g);
-  E('circle', { cx: 32, cy: 24, r: 3.4, fill: 'url(#metalG)' }, g);
-  E('path', { d: 'M 26 40 L 20 62 M 38 40 L 44 62', stroke: '#a82f2f', 'stroke-width': 7, 'stroke-linecap': 'round' }, g);
+  // steel head with stripping notches
+  E('path', { d: 'M 18 6 L 46 6 L 40 30 L 24 30 Z', fill: 'url(#metalG)' }, g);
+  for (let i = 0; i < 4; i++) E('circle', { cx: 24 + i * 4.2, cy: 13, r: 1.3, fill: '#3a3d45' }, g);
+  E('circle', { cx: 32, cy: 24, r: 3, fill: '#6b6f77', stroke: 'rgba(0,0,0,0.3)', 'stroke-width': 0.8 }, g);
+  // red plastic grips
+  E('path', { d: 'M 24 30 L 15 62 L 22 62 L 30 31 Z', fill: '#d43c3c' }, g);
+  E('path', { d: 'M 40 30 L 49 62 L 42 62 L 34 31 Z', fill: '#d43c3c' }, g);
+  E('path', { d: 'M 24 30 L 21 42 L 27 41 L 30 31 Z', fill: 'rgba(255,255,255,0.16)' }, g);
 }
 function drawCutters(g) {
-  E('path', { d: 'M 28 6 C 24 16 24 24 30 30 L 36 24 C 32 18 32 12 34 6 Z', fill: 'url(#metalG)', filter: 'url(#partShadow)' }, g);
-  E('path', { d: 'M 40 8 C 42 16 40 24 34 30 L 30 24 C 34 18 36 12 36 8 Z', fill: '#b9bdc4' }, g);
-  E('circle', { cx: 33, cy: 27, r: 3, fill: '#7d818a' }, g);
-  E('path', { d: 'M 30 30 L 22 60 M 36 30 L 46 60', stroke: '#e0a52e', 'stroke-width': 7, 'stroke-linecap': 'round' }, g);
+  // angled cutting jaws
+  E('path', { d: 'M 20 4 C 30 10 34 18 33 27 L 27 24 C 26 16 22 10 16 8 Z', fill: 'url(#metalG)' }, g);
+  E('path', { d: 'M 44 6 C 34 12 30 18 31 27 L 37 24 C 38 16 42 12 48 10 Z', fill: '#b9bdc4' }, g);
+  E('circle', { cx: 32, cy: 26, r: 3, fill: '#6b6f77', stroke: 'rgba(0,0,0,0.3)', 'stroke-width': 0.8 }, g);
+  // orange grips
+  E('path', { d: 'M 29 28 L 21 62 L 28 62 L 34 30 Z', fill: '#e0a52e' }, g);
+  E('path', { d: 'M 35 28 L 43 62 L 36 62 L 32 30 Z', fill: '#e0a52e' }, g);
 }
 function drawUSB(g) {
-  E('path', { d: 'M 14 60 C 4 40 16 26 30 22', stroke: '#2b2d33', 'stroke-width': 5, fill: 'none', 'stroke-linecap': 'round' }, g);
-  E('rect', { x: 26, y: 6, width: 24, height: 18, rx: 2.5, fill: 'url(#metalG)', filter: 'url(#partShadow)' }, g);
-  E('rect', { x: 30, y: 24, width: 16, height: 12, rx: 2, fill: '#2b2d33' }, g);
-  txt(g, 60, 46, 'USB', 6, 'rgba(0,0,0,0.4)');
+  E('path', { d: 'M 14 62 C 2 42 16 26 32 20', stroke: '#2b2d33', 'stroke-width': 5, fill: 'none', 'stroke-linecap': 'round' }, g);
+  E('rect', { x: 24, y: 4, width: 24, height: 20, rx: 2.5, transform: 'rotate(-24 24 4)', fill: 'url(#metalG)' }, g);
+  E('rect', { x: 28, y: 22, width: 16, height: 12, rx: 2, transform: 'rotate(-24 28 22)', fill: '#2b2d33' }, g);
+  txt(g, 58, 50, 'USB', 6, 'rgba(0,0,0,0.4)');
 }
 function drawProbes(g) {
-  E('line', { x1: 8, y1: 62, x2: 34, y2: 12, stroke: '#c33', 'stroke-width': 3.4, 'stroke-linecap': 'round' }, g);
-  E('line', { x1: 30, y1: 66, x2: 56, y2: 18, stroke: '#222', 'stroke-width': 3.4, 'stroke-linecap': 'round' }, g);
-  E('line', { x1: 34, y1: 12, x2: 40, y2: 2, stroke: 'url(#metalG)', 'stroke-width': 2, 'stroke-linecap': 'round' }, g);
-  E('line', { x1: 56, y1: 18, x2: 62, y2: 8, stroke: 'url(#metalG)', 'stroke-width': 2, 'stroke-linecap': 'round' }, g);
+  E('path', { d: 'M 6 66 C 0 42 14 28 30 20', stroke: '#c33', 'stroke-width': 4, fill: 'none', 'stroke-linecap': 'round' }, g);
+  E('path', { d: 'M 26 68 C 22 48 34 32 50 24', stroke: '#222', 'stroke-width': 4, fill: 'none', 'stroke-linecap': 'round' }, g);
+  E('rect', { x: 25, y: 8, width: 8, height: 17, rx: 3.5, transform: 'rotate(-30 25 8)', fill: '#c33' }, g);
+  E('rect', { x: 45, y: 12, width: 8, height: 17, rx: 3.5, transform: 'rotate(-30 45 12)', fill: '#242424' }, g);
+  E('line', { x1: 31, y1: 9, x2: 37, y2: -1, stroke: 'url(#metalG)', 'stroke-width': 2, 'stroke-linecap': 'round' }, g);
+  E('line', { x1: 51, y1: 13, x2: 57, y2: 3, stroke: 'url(#metalG)', 'stroke-width': 2, 'stroke-linecap': 'round' }, g);
 }
 function drawHeatShrink(g) {
-  E('rect', { x: 0, y: -5, width: 3 * P, height: 10, rx: 5, fill: '#1c1d22', filter: 'url(#partShadow)' }, g);
-  E('rect', { x: 0, y: -5, width: 3 * P, height: 3.4, rx: 2, fill: 'rgba(255,255,255,0.14)' }, g);
+  E('rect', { x: 0, y: -5, width: 3 * P, height: 10, rx: 5, fill: '#1c1d22' }, g);
+  E('rect', { x: 0, y: -5, width: 3 * P, height: 3.4, rx: 2, fill: 'rgba(255,255,255,0.16)' }, g);
+  E('rect', { x: 2, y: -1.5, width: 3 * P - 4, height: 3, rx: 1.5, fill: 'rgba(0,0,0,0.25)' }, g);
 }
 function drawPCB(g) {
   const W = 120, H = 84;

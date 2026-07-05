@@ -128,9 +128,8 @@ body {
   -webkit-user-drag: none;
   -webkit-tap-highlight-color: transparent;
 }
-.cell:focus, .cell:focus-visible, .cell:active { outline: none; border: none; }
+.cell:focus, .cell:focus-visible, .cell:active, .cell:hover { outline: none; border: none; background: none; }
 .cell svg:focus { outline: none; }
-.cell:hover { background: #f0eee8; }
 .cell:active { cursor: grabbing; }
 .cell svg { width: 78%; height: 78%; overflow: visible; pointer-events: none; }
 .cell.disabled { opacity: 0.45; cursor: default; }
