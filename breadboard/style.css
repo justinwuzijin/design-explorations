@@ -66,11 +66,40 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 .tb-right button:hover { background: rgba(0, 0, 0, 0.1); color: #000; }
-#menu-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 6px 9px; }
-#menu-toggle svg { display: block; }
-
 /* ---- layout ------------------------------------------------------------- */
-#app { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+#app { flex: 1; display: flex; min-height: 0; overflow: hidden; position: relative; }
+
+/* ---- hanging menu tab (top-right corner of the parts panel) ------------- */
+#menu-toggle {
+  position: absolute;
+  top: 0;
+  /* hang from the top-right corner of the parts panel */
+  left: calc(clamp(180px, 16.5vw, 250px) - 50px);
+  z-index: 40;
+  width: 36px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.5);
+  background: #ffffff;
+  border: 1px solid var(--rule);
+  border-top: none;
+  border-radius: 0 0 11px 11px;
+  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.13);
+  transform-origin: 50% 0;
+  transition: transform 0.34s cubic-bezier(.34, 1.4, .5, 1), box-shadow 0.24s ease,
+    color 0.15s, background 0.15s, left 0.3s ease;
+}
+#menu-toggle:hover {
+  color: #000;
+  transform: translateY(3px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.18);
+}
+#menu-toggle:active { transform: translateY(1px) scale(0.97); }
+#menu-toggle svg { display: block; }
 
 /* ---- palette ------------------------------------------------------------ */
 #palette {
@@ -185,22 +214,16 @@ body {
   padding: 7px 16px;
   user-select: none;
 }
-.wb-label {
-  font-size: 0.64rem;
-  letter-spacing: 0.09em;
-  text-transform: lowercase;
-  color: rgba(0, 0, 0, 0.45);
-}
 .wb-swatches { display: flex; align-items: center; gap: 9px; }
 .wb-sw {
   width: 18px;
   height: 18px;
   border-radius: 50%;
   cursor: pointer;
-  transition: transform 0.12s;
+  transform-origin: center bottom;
+  transition: transform 0.08s ease-out;
+  will-change: transform;
 }
-.wb-sw:hover { transform: scale(1.18); }
-.wb-sw.active { transform: scale(1.42); }
 .wb-custom {
   position: relative;
   width: 20px;
@@ -209,10 +232,10 @@ body {
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition: transform 0.12s;
+  transform-origin: center bottom;
+  transition: transform 0.08s ease-out;
+  will-change: transform;
 }
-.wb-custom:hover { transform: scale(1.15); }
-.wb-custom.active { transform: scale(1.35); }
 .wb-custom input[type="color"] {
   position: absolute;
   inset: 0;
@@ -297,3 +320,53 @@ body {
 .ins-actions button:hover { background: rgba(0, 0, 0, 0.12); color: #000; }
 .ins-actions button.danger:hover { background: #fbe4e4; color: #b23c3c; }
 .ins-note { font-size: 0.64rem; color: rgba(0, 0, 0, 0.4); line-height: 1.45; }
+
+/* ---- CircuitJS schematic drawer ----------------------------------------- */
+#schematic {
+  position: fixed;
+  top: 46px;
+  right: 0;
+  bottom: 0;
+  width: min(48vw, 640px);
+  background: #fff;
+  border-left: 1px solid var(--rule);
+  box-shadow: -10px 0 34px rgba(0, 0, 0, 0.14);
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+#schematic.open { transform: none; }
+.sch-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--rule);
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.03em;
+}
+#sch-close {
+  border: none; background: rgba(0, 0, 0, 0.05); cursor: pointer;
+  border-radius: 6px; padding: 4px 9px; font-size: 0.78rem; color: rgba(0,0,0,0.55);
+}
+#sch-close:hover { background: rgba(0, 0, 0, 0.12); color: #000; }
+#sch-frame { flex: 1; border: none; width: 100%; background: #000; }
+.sch-import {
+  border-top: 1px solid var(--rule);
+  padding: 10px 14px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sch-tip { font-size: 0.64rem; color: var(--muted); line-height: 1.5; }
+.sch-tip b { color: rgba(0, 0, 0, 0.6); }
+#netlist {
+  height: 74px; resize: vertical;
+  font: 0.66rem/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
+  border: 1px solid var(--rule); border-radius: 8px; padding: 8px;
+  background: #fbfaf8;
+}
+#netlist:focus { outline: none; border-color: #b9c6e8; }
+.sch-row { display: flex; align-items: center; gap: 12px; }
+#build-bb {
+  border: none; cursor: pointer; background: #2f6fed; color: #fff;
+  font: 500 0.72rem 'Inter', sans-serif; padding: 8px 14px; border-radius: 8px;
+}
+#build-bb:hover { background: #265fd0; }
+#bridge-status { font-size: 0.64rem; color: var(--muted); }

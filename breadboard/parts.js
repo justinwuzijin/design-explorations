@@ -255,6 +255,19 @@ function drawArduino(g, inst) {
   txt(g, 154, H - 22, 'VIN', 4.6, 'rgba(255,255,255,0.6)');
 }
 
+// off-board 9V battery photo with two flying terminal leads ending in ports
+function drawBattery(g) {
+  const W = 46, H = 84;
+  // red (+) and black (-) leads curving out of the top terminals to the ports
+  E('path', { d: 'M 18 3 C 12 -6 10 -10 10 -18', stroke: '#d43c3c', 'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round' }, g);
+  E('path', { d: 'M 29 3 C 35 -6 36 -10 36 -18', stroke: '#26262a', 'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round' }, g);
+  const im = E('image', { x: 0, y: 0, width: W, height: H, preserveAspectRatio: 'xMidYMid meet' }, g);
+  im.setAttribute('href', 'img/battery.png');
+  im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', 'img/battery.png');
+  txt(g, 2, -15, '+', 8, '#d43c3c', 'middle', 800);
+  txt(g, 44, -15, '\u2212', 8, '#26262a', 'middle', 800);
+}
+
 function drawBattery9V(g) {
   const W = 92, H = 138;
   E('rect', { x: 0, y: 0, width: W, height: H, rx: 7, fill: '#1c1d22', filter: 'url(#softShadow)' }, g);
@@ -389,6 +402,7 @@ function dipDef(id, name, half, spanRows, label, icType, names, sub) {
     props: {},
     draw: (g) => drawDIP(g, half, spanRows, label, sub),
     img: 'img/ic.png',
+    imgBox: { x: -0.5 * P, y: -6, w: (half - 1) * P + P, h: spanRows * P + 12 },
     thumb: { x: -12, y: -8, w: (half - 1) * P + 24, h: spanRows * P + 16 },
   };
 }
@@ -410,6 +424,7 @@ const rdef = (id, value, name, filter = '') => ({
   props: { ohms: value },
   draw: (g, inst) => drawAxialResistor(g, 3, inst.props.ohms),
   img: 'img/resistor.png', filter,          // real photo, recolored per value
+  imgBox: { x: -6, y: -13, w: 3 * P + 12, h: 26 },
   thumb: { x: -4, y: -14, w: 3 * P + 8, h: 28 },
 });
 
@@ -420,6 +435,7 @@ const ledDef = (id, color, name, filter = '') => ({
   props: { color },
   draw: drawLED,
   img: 'img/led.png', filter,               // same LED photo, hue-shifted per color
+  imgBox: { x: -11, y: -34, w: P + 22, h: 44 },
   thumb: { x: -10, y: -12, w: P + 20, h: 30 },
 });
 
@@ -429,7 +445,9 @@ export const CATALOG = [
     id: 'button', cat: 'switches', name: 'push button', kind: 'board',
     pins: [{ x: 0, y: 0, name: 'a1' }, { x: 2, y: 0, name: 'a2' }, { x: 0, y: 3, name: 'b1' }, { x: 2, y: 3, name: 'b2' }],
     sim: { type: 'button' }, props: {},
-    draw: drawTactile, img: 'img/button.png', thumb: { x: -8, y: -4, w: 2 * P + 16, h: 3 * P + 8 },
+    draw: drawTactile, img: 'img/button.png',
+    imgBox: { x: -8, y: -6, w: 2 * P + 16, h: 3 * P + 12 },
+    thumb: { x: -8, y: -4, w: 2 * P + 16, h: 3 * P + 8 },
   },
 
   // --- resistors (same photo, recolored per value so each reads distinctly)
@@ -455,12 +473,14 @@ export const CATALOG = [
   dipDef('cd4013', 'CD4013BE flip-flop', 7, 3, 'CD4013BE', 'cd4013', CD4013, 'dual D-FF'),
   dipDef('ne555', 'NE555P timer', 4, 3, 'NE555P', 'ne555', NE555, 'timer'),
 
-  // --- power (single source)
+  // --- power (single source): a free 9V battery wired to the board
   {
-    id: 'pow5', cat: 'power', name: '5 V power source', kind: 'board',
-    pins: [{ x: 0, y: 0, name: 'pos' }, { x: 1, y: 0, name: 'neg' }],
-    sim: { type: 'source', volts: 5 }, props: {},
-    draw: draw5V, thumb: { x: -12, y: -30, w: P + 24, h: 40 },
+    id: 'pow5', cat: 'power', name: '9V battery (power source)', kind: 'free',
+    ports: [{ x: 10, y: -18, name: 'pos' }, { x: 36, y: -18, name: 'neg' }],
+    sim: { type: 'supply', volts: 5 }, props: { volts: 5 },
+    draw: drawBattery,
+    size: { w: 46, h: 84 },
+    thumb: { x: -6, y: -26, w: 58, h: 116 },
   },
 ];
 

@@ -72,13 +72,22 @@ function footprintAt(def, wx, wy, rot) {
   return { ok: true, holes, anchor };
 }
 
+// world position of a free part's port, accounting for its rotation angle
+function portWorld(inst, port) {
+  const s = inst.def.size || { w: 40, h: 40 };
+  const cx = s.w / 2, cy = s.h / 2;
+  const a = ((inst.ang || 0) * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const dx = port.x - cx, dy = port.y - cy;
+  return [inst.x + cx + dx * cos - dy * sin, inst.y + cy + dx * sin + dy * cos];
+}
+
 function nodeAt(wx, wy) {
   const h = nearestHole(wx, wy, P * 0.55);
   if (h) return { node: baseNetOf(h.id), hole: h.id, x: h.x, y: h.y };
   for (const inst of state.parts) {
     if (!inst.def.ports) continue;
     for (const port of inst.def.ports) {
-      const px = inst.x + port.x, py = inst.y + port.y;
+      const [px, py] = portWorld(inst, port);
       const d = Math.hypot(px - wx, py - wy);
       if (d < 11) return { node: portNode(inst, port.name), port: [inst.uid, port.name], x: px, y: py };
     }
@@ -90,20 +99,47 @@ function endpointPos(ep) {
   const inst = state.parts.find((p) => p.uid === ep.port[0]);
   if (!inst) return [0, 0];
   const port = inst.def.ports.find((pp) => pp.name === ep.port[1]);
-  return [inst.x + port.x, inst.y + port.y];
+  return portWorld(inst, port);
 }
 function epNode(ep) {
   return ep.hole ? baseNetOf(ep.hole) : `q${ep.port[0]}:${ep.port[1]}`;
 }
 
 // ---------------------------------------------------------------- rendering
+const LED_GLOW = { red: '#ff5a52', green: '#57e06a', yellow: '#ffe14a' };
+
+// A placed part is drawn either from its real photo (`def.img`) or the vector
+// fallback. The photo is dropped into `def.imgBox` (pin-space, so it rotates and
+// snaps with the part); logic dots and LED glow are layered on top by the loop.
+function renderArt(g, inst) {
+  if (inst.def.img) drawImagePart(g, inst);
+  else inst.def.draw(g, inst);
+}
+function drawImagePart(g, inst) {
+  const box = inst.def.imgBox || { x: -20, y: -20, w: 40, h: 40 };
+  const im = E('image', {
+    x: box.x, y: box.y, width: box.w, height: box.h,
+    preserveAspectRatio: 'xMidYMid meet',
+  }, g);
+  im.setAttribute('href', inst.def.img);
+  im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', inst.def.img);
+  if (inst.def.filter) im.style.filter = inst.def.filter;
+  if (inst.def.sim && inst.def.sim.type === 'led') {
+    const cx = box.x + box.w / 2, cy = box.y + box.h * 0.34;
+    const glow = E('circle', { cx, cy, r: 12, fill: LED_GLOW[inst.props.color] || '#ff5a52', opacity: 0 }, g);
+    glow.setAttribute('filter', 'url(#ledGlow)');
+    glow.style.mixBlendMode = 'screen';
+    inst._dyn = { glow, imageEl: im, base: inst.def.filter || '' };
+  }
+}
+
 function renderPart(inst) {
   if (inst.g) inst.g.remove();
   const g = E('g', { class: 'part' }, partsL);
   inst.g = g;
   g.dataset.uid = inst.uid;
   inst._dyn = null;
-  inst.def.draw(g, inst);
+  renderArt(g, inst);
   // snappable port dots for free parts
   if (inst.def.ports) {
     for (const port of inst.def.ports) {
@@ -118,7 +154,10 @@ function positionPart(inst) {
     const a = HOLE_BY_ID.get(inst.holes[0]);
     inst.g.setAttribute('transform', `translate(${a.x},${a.y}) rotate(${inst.rot * 90})`);
   } else {
-    inst.g.setAttribute('transform', `translate(${inst.x},${inst.y})`);
+    if (inst.x == null) inst.x = 0;
+    if (inst.y == null) inst.y = 0;
+    const s = inst.def.size || { w: 40, h: 40 };
+    inst.g.setAttribute('transform', `translate(${inst.x},${inst.y}) rotate(${inst.ang || 0} ${s.w / 2} ${s.h / 2})`);
   }
 }
 
@@ -158,20 +197,40 @@ function renderAll() {
 }
 
 // selection box
+// Figma-style selection: a crisp bounding box with constant-size corner
+// handles and a rotation handle floating above the top edge.
 let selBox = null;
 function refreshSelBox() {
   if (selBox) { selBox.remove(); selBox = null; }
   if (!sel) return;
-  let bb, pad = 7;
-  if (sel.kind === 'part') bb = sel.inst.g.getBBox();
-  else bb = sel.wire.g.getBBox();
-  const g = sel.kind === 'part' ? sel.inst.g : sel.wire.g;
+  const isPart = sel.kind === 'part';
+  const g = isPart ? sel.inst.g : sel.wire.g;
+  const bb = g.getBBox();
   const m = g.getAttribute('transform') || '';
-  selBox = E('rect', {
-    x: bb.x - pad, y: bb.y - pad, width: bb.width + pad * 2, height: bb.height + pad * 2,
-    rx: 6, fill: 'none', stroke: '#2f6fed', 'stroke-width': 1.4, 'stroke-dasharray': '5 4',
-    transform: m, 'pointer-events': 'none',
-  }, fxL);
+  const s = 1 / view.k;                 // keep chrome a constant on-screen size
+  const pad = 6 * s;
+  const x = bb.x - pad, y = bb.y - pad, w = bb.width + pad * 2, h = bb.height + pad * 2;
+  selBox = E('g', { transform: m }, fxL);
+  E('rect', { x, y, width: w, height: h, fill: 'none', stroke: '#2f6fed', 'stroke-width': 1.5 * s, 'pointer-events': 'none' }, selBox);
+  if (!isPart) return;                  // wires: outline only
+
+  // rotation handle above the top edge
+  const cxm = x + w / 2, ry = y - 22 * s;
+  E('line', { x1: cxm, y1: y, x2: cxm, y2: ry, stroke: '#2f6fed', 'stroke-width': 1.2 * s, 'pointer-events': 'none' }, selBox);
+  const rot = E('circle', { cx: cxm, cy: ry, r: 5.5 * s, fill: '#fff', stroke: '#2f6fed', 'stroke-width': 1.6 * s }, selBox);
+  rot.style.cursor = 'grab';
+  rot.addEventListener('pointerdown', beginRotate);
+
+  // corner handles (also grab to rotate — parts have no meaningful resize)
+  const hs = 8 * s;
+  for (const [hx, hy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+    const sq = E('rect', {
+      x: hx - hs / 2, y: hy - hs / 2, width: hs, height: hs, rx: 1.2 * s,
+      fill: '#fff', stroke: '#2f6fed', 'stroke-width': 1.6 * s,
+    }, selBox);
+    sq.style.cursor = 'grab';
+    sq.addEventListener('pointerdown', beginRotate);
+  }
 }
 
 // ---------------------------------------------------------------- occupancy
@@ -350,12 +409,10 @@ function buildInspector() {
 
     const actions = document.createElement('div');
     actions.className = 'ins-actions';
-    if (inst.def.kind === 'board') {
-      const rb = document.createElement('button');
-      rb.textContent = 'rotate (r)';
-      rb.onclick = rotateSelected;
-      actions.appendChild(rb);
-    }
+    const rb = document.createElement('button');
+    rb.textContent = 'rotate (r)';
+    rb.onclick = rotateSelected;
+    actions.appendChild(rb);
     const db = document.createElement('button');
     db.textContent = 'delete';
     db.className = 'danger';
@@ -365,39 +422,123 @@ function buildInspector() {
   }
 }
 
-function rotateSelected() {
-  if (!sel || sel.kind !== 'part' || sel.inst.def.kind !== 'board') return;
-  const inst = sel.inst;
-  const a = HOLE_BY_ID.get(inst.holes[0]);
-  const saveRot = inst.rot;
-  inst.rot = (inst.rot + 1) % 4;
-  // temporarily free own holes for validation
-  const fp = (() => {
-    for (const id of inst.holes) occ.delete(id);
-    const r = footprintAt(inst.def, a.x, a.y, inst.rot);
-    return r;
-  })();
-  if (fp.ok) {
-    inst.holes = fp.holes;
-    positionPart(inst);
-  } else {
-    inst.rot = saveRot;
+// world-space center of a part (rotation pivot)
+function partCenterWorld(inst) {
+  if (inst.def.kind !== 'board') {
+    const s = inst.def.size || { w: 40, h: 40 };
+    return { x: inst.x + s.w / 2, y: inst.y + s.h / 2 };
   }
+  const r = inst.g.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+  return {
+    x: (r.left + r.width / 2 - sr.left - view.x) / view.k,
+    y: (r.top + r.height / 2 - sr.top - view.y) / view.k,
+  };
+}
+function rerenderPartWires(uid) {
+  for (const wr of state.wires) {
+    if ((wr.a.port && wr.a.port[0] === uid) || (wr.b.port && wr.b.port[0] === uid)) renderWire(wr);
+  }
+}
+
+// snap a board part to an absolute 90° step, validating the footprint
+function rotateBoardTo(inst, step) {
+  step = ((step % 4) + 4) % 4;
+  if (step === inst.rot) return;
+  const a = HOLE_BY_ID.get(inst.holes[0]);
+  const save = inst.rot;
+  inst.rot = step;
+  for (const id of inst.holes) occ.delete(id);
+  const fp = footprintAt(inst.def, a.x, a.y, inst.rot);
+  if (fp.ok) { inst.holes = fp.holes; positionPart(inst); }
+  else { inst.rot = save; }
   rebuildOcc();
+}
+
+// drag the rotation/corner handle to spin the part (free = any angle, board = 90° snaps)
+function beginRotate(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!sel || sel.kind !== 'part') return;
+  const inst = sel.inst;
+  const isBoard = inst.def.kind === 'board';
+  const c = partCenterWorld(inst);
+  const start = toWorld(e);
+  const startAng = Math.atan2(start.y - c.y, start.x - c.x);
+  const base = isBoard ? inst.rot * 90 : (inst.ang || 0);
+  const move = (ev) => {
+    const w = toWorld(ev);
+    let deg = base + (Math.atan2(w.y - c.y, w.x - c.x) - startAng) * 180 / Math.PI;
+    if (isBoard) {
+      rotateBoardTo(inst, Math.round(deg / 90));
+    } else {
+      if (ev.shiftKey) deg = Math.round(deg / 15) * 15;   // shift = 15° snaps
+      inst.ang = ((deg % 360) + 360) % 360;
+      positionPart(inst);
+      rerenderPartWires(inst.uid);
+    }
+    refreshSelBox();
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    saveSoon();
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+}
+
+function rotateSelected() {
+  if (!sel || sel.kind !== 'part') return;
+  const inst = sel.inst;
+  if (inst.def.kind === 'board') {
+    rotateBoardTo(inst, inst.rot + 1);
+  } else {
+    inst.ang = (((inst.ang || 0) + 90) % 360);
+    positionPart(inst);
+    rerenderPartWires(inst.uid);
+  }
   refreshSelBox();
   saveSoon();
 }
 
 // ---------------------------------------------------------------- wire color
 let currentWireColor = '#3fa54a';
+const wirebar = document.getElementById('wirebar');
 const wbSwatches = document.getElementById('wb-swatches');
 const wbColorInput = document.getElementById('wb-color');
 const wbCustom = wbColorInput.closest('.wb-custom');
+
+// Dock-style proximity magnification: swatches swell as the cursor nears them.
+const MAG_MAX = 1.9;     // peak scale directly under the cursor
+const MAG_RADIUS = 66;   // px of horizontal influence around the cursor
+let magPointerX = null;  // last cursor x while hovering the bar (null = away)
+
+function magItems() {
+  return [...wbSwatches.children, wbCustom];
+}
+function baseScaleOf(el) {
+  if (!el.classList.contains('active')) return 1;
+  return el === wbCustom ? 1.35 : 1.42;
+}
+function updateMagnify() {
+  for (const el of magItems()) {
+    let mag = 1;
+    if (magPointerX != null) {
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const t = Math.max(0, 1 - Math.abs(magPointerX - cx) / MAG_RADIUS);
+      const s = t * t * (3 - 2 * t); // smoothstep falloff
+      mag = 1 + (MAG_MAX - 1) * s;
+    }
+    el.style.transform = `scale(${Math.max(baseScaleOf(el), mag)})`;
+  }
+}
 
 function applyWireColor(color, fromCustom) {
   currentWireColor = color;
   [...wbSwatches.children].forEach((sw) => sw.classList.toggle('active', !fromCustom && sw.dataset.color === color));
   wbCustom.classList.toggle('active', !!fromCustom);
+  updateMagnify();
   if (pendingWire) { pendingWire.color = color; }
   if (sel && sel.kind === 'wire') {
     sel.wire.color = color;
@@ -419,6 +560,8 @@ function buildWireBar() {
     wbSwatches.appendChild(sw);
   }
   wbColorInput.addEventListener('input', () => applyWireColor(wbColorInput.value, true));
+  wirebar.addEventListener('pointermove', (e) => { magPointerX = e.clientX; updateMagnify(); });
+  wirebar.addEventListener('pointerleave', () => { magPointerX = null; updateMagnify(); });
   applyWireColor(currentWireColor, false);
 }
 
@@ -484,7 +627,7 @@ function portAt(wx, wy) {
   for (const inst of state.parts) {
     if (!inst.def.ports) continue;
     for (const port of inst.def.ports) {
-      const px = inst.x + port.x, py = inst.y + port.y;
+      const [px, py] = portWorld(inst, port);
       if (Math.hypot(px - wx, py - wy) < 11) {
         return { node: portNode(inst, port.name), port: [inst.uid, port.name], x: px, y: py };
       }
@@ -536,7 +679,7 @@ function startPaletteDrag(e, def) {
   if (pendingWire) cancelWire();
   const ghost = E('g', { opacity: 0.8, 'pointer-events': 'none' }, fxL);
   const inst = { props: { ...(def.props || {}) }, def, rt: {} };
-  def.draw(ghost, inst);
+  renderArt(ghost, inst);
   let valid = def.kind !== 'board';
   let lastFp = null;
   let wpos = { x: -9999, y: -9999 };
@@ -698,6 +841,7 @@ svg.addEventListener('wheel', (e) => {
   view.y = my - ((my - view.y) / k0) * k1;
   view.k = k1;
   applyView();
+  refreshSelBox();   // keep selection chrome a constant on-screen size
 }, { passive: false });
 
 window.addEventListener('keydown', (e) => {
@@ -723,7 +867,7 @@ function save() {
   const data = {
     name: document.getElementById('projname').value,
     parts: state.parts.map((p) => ({
-      def: p.def.id, props: p.props, rot: p.rot || 0,
+      def: p.def.id, props: p.props, rot: p.rot || 0, ang: p.ang || 0,
       holes: p.holes || null, x: p.x, y: p.y,
     })),
     wires: state.wires.map((w) => ({
@@ -742,7 +886,7 @@ function load() {
   for (const sp of data.parts || []) {
     const def = DEF_BY_ID.get(sp.def);
     if (!def) continue;
-    addPart(def, { props: sp.props, rot: sp.rot, holes: sp.holes || undefined, x: sp.x, y: sp.y });
+    addPart(def, { props: sp.props, rot: sp.rot, ang: sp.ang, holes: sp.holes || undefined, x: sp.x, y: sp.y });
   }
   for (const sw of data.wires || []) {
     const fix = (ep) => ep.hole ? { hole: ep.hole } : { port: [state.parts[ep.port[0]]?.uid, ep.port[1]] };
@@ -768,6 +912,119 @@ document.getElementById('menu-toggle').addEventListener('click', () => {
 });
 document.getElementById('projname').addEventListener('change', saveSoon);
 
+// ---------------------------------------------------------------- CircuitJS bridge
+const schEl = document.getElementById('schematic');
+document.getElementById('btn-schematic').addEventListener('click', () => schEl.classList.toggle('open'));
+document.getElementById('sch-close').addEventListener('click', () => schEl.classList.remove('open'));
+document.getElementById('build-bb').addEventListener('click', () => {
+  const status = document.getElementById('bridge-status');
+  try {
+    status.textContent = importSchematic(document.getElementById('netlist').value);
+    fitView();
+  } catch (err) {
+    status.textContent = 'could not parse that netlist';
+    console.error(err);
+  }
+});
+
+const RES_DEFS = CATALOG.filter((d) => d.sim && d.sim.type === 'resistor');
+function nearestResistorDef(ohms) {
+  let best = RES_DEFS[0], bd = Infinity;
+  for (const d of RES_DEFS) {
+    const diff = Math.abs(Math.log(d.props.ohms) - Math.log(ohms || 1000));
+    if (diff < bd) { bd = diff; best = d; }
+  }
+  return best;
+}
+
+// Parse a CircuitJS "Export As Text" netlist and lay out a functional breadboard:
+// components placed in a row, same-net pins joined by jumpers, power/ground to
+// the rails. Supported: resistor, LED, switch, voltage source (R/v), ground, wire.
+function importSchematic(text) {
+  if (!text || !text.trim()) return 'paste a CircuitJS netlist first';
+  document.getElementById('btn-clear').click();   // start from a clean board
+
+  // union-find over element coordinates (shared coords / wires => one net)
+  const parent = new Map();
+  const add = (a) => { if (!parent.has(a)) parent.set(a, a); };
+  const find = (a) => { let r = a; while (parent.get(r) !== r) r = parent.get(r); let n = a; while (parent.get(n) !== r) { const nx = parent.get(n); parent.set(n, r); n = nx; } return r; };
+  const uni = (a, b) => { add(a); add(b); const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+  const K = (x, y) => x + ',' + y;
+
+  const SUP = new Set(['w', 'r', 'g', 'R', 'v', '162', 's']);
+  const elems = [];
+  let skipped = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const ln = raw.trim();
+    if (!ln) continue;
+    const tk = ln.split(/\s+/);
+    const type = tk[0];
+    if (type === '$' || type === 'o' || type === 'h' || type === '%' || type === 'B' || type === '38') continue;
+    if (!SUP.has(type)) { skipped++; continue; }
+    const x1 = +tk[1], y1 = +tk[2], x2 = +tk[3], y2 = +tk[4];
+    if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) continue;
+    const a = K(x1, y1), b = K(x2, y2);
+    add(a); add(b);
+    if (type === 'w' || type === 'g') uni(a, b);
+    elems.push({ type, a, b, p: tk.slice(5) });
+  }
+
+  // classify nets
+  const ground = new Set(), plus = new Set();
+  for (const e of elems) {
+    if (e.type === 'g') ground.add(find(e.a));
+    if (e.type === 'R') plus.add(find(e.a));
+    if (e.type === 'v') { plus.add(find(e.b)); ground.add(find(e.a)); }
+  }
+  const isGround = (c) => ground.has(find(c));
+  const isPlus = (c) => plus.has(find(c)) && !isGround(c);
+
+  // rails: spread taps across rail holes (all one net each)
+  let pr = 4, mr = 4;
+  const nextPlus = () => `T+${Math.min(49, pr++)}`;
+  const nextMinus = () => `T-${Math.min(49, mr++)}`;
+
+  // free battery placed beside the board, terminals wired to the rails
+  const supply = addPart(DEF_BY_ID.get('pow5'), { x: BODY.x - 78, y: BODY.y + BODY.h * 0.5 });
+  addWire({ port: [supply.uid, 'pos'] }, { hole: nextPlus() }, '#d43c3c', 'wire');
+  addWire({ port: [supply.uid, 'neg'] }, { hole: nextMinus() }, '#26262a', 'wire');
+
+  const anchor = new Map();
+  const connect = (hole, coord) => {
+    if (isGround(coord)) { addWire({ hole }, { hole: nextMinus() }, '#26262a', 'wire'); return; }
+    if (isPlus(coord)) { addWire({ hole }, { hole: nextPlus() }, '#d43c3c', 'wire'); return; }
+    const r = find(coord);
+    if (anchor.has(r)) addWire({ hole }, { hole: anchor.get(r) }, '#3fa54a', 'wire');
+    else anchor.set(r, hole);
+  };
+
+  let col = 6, placed = { r: 0, led: 0, sw: 0 };
+  const wrap = () => { if (col > 56) col = 6; };
+  for (const e of elems) {
+    if (e.type === 'r') {
+      const ohms = parseFloat(e.p[0]) || 1000;
+      addPart(nearestResistorDef(ohms), { holes: [`${col}c`, `${col + 3}c`], props: { ohms } });
+      connect(`${col}c`, e.a); connect(`${col + 3}c`, e.b);
+      col += 5; placed.r++;
+    } else if (e.type === '162') {
+      addPart(DEF_BY_ID.get('led-red'), { holes: [`${col}c`, `${col + 1}c`] });
+      connect(`${col}c`, e.a); connect(`${col + 1}c`, e.b);
+      col += 3; placed.led++;
+    } else if (e.type === 's') {
+      addPart(DEF_BY_ID.get('button'), { holes: [`${col}e`, `${col + 2}e`, `${col}f`, `${col + 2}f`] });
+      connect(`${col}e`, e.a); connect(`${col}f`, e.b);
+      col += 4; placed.sw++;
+    }
+    wrap();
+  }
+
+  const parts = placed.r + placed.led + placed.sw;
+  if (parts === 0) return skipped ? `no supported parts found (${skipped} unsupported skipped)` : 'no components found in netlist';
+  let msg = `built ${placed.r} resistor(s), ${placed.led} LED(s), ${placed.sw} switch(es)`;
+  if (skipped) msg += ` \u00b7 ${skipped} unsupported part(s) skipped`;
+  return msg;
+}
+
 // ---------------------------------------------------------------- sim + dynamic render loop
 let lastT = 0;
 let dotsG = null;
@@ -787,8 +1044,9 @@ function frame(ts) {
     const dyn = inst._dyn;
     if (type === 'led' && dyn) {
       const b = rt.bright || 0;
-      dyn.glow.setAttribute('opacity', (b * 0.9).toFixed(3));
-      dyn.body.setAttribute('fill', b > 0.04 ? dyn.colorFill[inst.props.color] : dyn.colorDim[inst.props.color]);
+      dyn.glow.setAttribute('opacity', (b * 0.95).toFixed(3));
+      if (dyn.imageEl) dyn.imageEl.style.filter = dyn.base + (b > 0.05 ? ` brightness(${(1 + b * 0.6).toFixed(2)})` : '');
+      if (dyn.body) dyn.body.setAttribute('fill', b > 0.04 ? dyn.colorFill[inst.props.color] : dyn.colorDim[inst.props.color]);
     } else if (type === 'button' && dyn) {
       dyn.cap.setAttribute('r', rt.pressed ? 7.4 : 8.4);
       dyn.cap.setAttribute('fill', rt.pressed ? '#9ea3ab' : 'url(#metalG)');

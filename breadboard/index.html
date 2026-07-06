@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=9" />
+  <link rel="stylesheet" href="style.css?v=12" />
 </head>
 <body>
 
@@ -16,18 +16,15 @@
       <a href="../" id="back">← back</a>
       <input id="projname" value="untitled circuit" spellcheck="false" />
     </div>
-    <div class="tb-right">
-      <button id="btn-clear" title="remove everything">clear</button>
-      <button id="btn-fit" title="reset the view">fit</button>
-      <button id="menu-toggle" title="hide/show parts" aria-label="toggle parts panel">
-        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-          <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-        </svg>
-      </button>
-    </div>
+    <div class="tb-right"></div>
   </header>
 
   <div id="app">
+    <button id="menu-toggle" title="hide/show parts" aria-label="toggle parts panel">
+      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+        <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+      </svg>
+    </button>
     <aside id="palette">
       <div id="grid"></div>
     </aside>
@@ -144,7 +141,6 @@
         </g>
       </svg>
       <div id="wirebar">
-        <span class="wb-label">wire color</span>
         <div class="wb-swatches" id="wb-swatches"></div>
         <label class="wb-custom" title="custom color">
           <span class="wb-plus">+</span>
@@ -155,6 +151,22 @@
     </div>
   </div>
 
-  <script type="module" src="main.js?v=7"></script>
+  <aside id="schematic">
+    <div class="sch-head">
+      <span>circuitjs → breadboard</span>
+      <button id="sch-close" aria-label="close">✕</button>
+    </div>
+    <iframe id="sch-frame" src="https://www.falstad.com/circuit/circuitjs.html" title="CircuitJS"></iframe>
+    <div class="sch-import">
+      <div class="sch-tip">In CircuitJS: <b>File → Export As Text</b>, paste it below, then Build. (resistors, LEDs, switches, power &amp; ground are supported; other parts are skipped)</div>
+      <textarea id="netlist" spellcheck="false" placeholder="paste CircuitJS 'Export As Text' netlist here"></textarea>
+      <div class="sch-row">
+        <button id="build-bb">build breadboard →</button>
+        <span id="bridge-status"></span>
+      </div>
+    </div>
+  </aside>
+
+  <script type="module" src="main.js?v=12"></script>
 </body>
 </html>
