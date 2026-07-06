@@ -1121,9 +1121,7 @@ function importSchematic(text) {
   // holds both their legs in different holes.
   const netHome = new Map();      // internal net root -> {col, top}
   const powerPlus = [], powerMinus = [], jumpers = [];
-  let usedBottom = false;
   const registerNet = (root, col, top) => {
-    if (!top) usedBottom = true;
     if (isGroundR(root)) { powerMinus.push({ col, top }); return; }
     if (isPlusR(root)) { powerPlus.push({ col, top }); return; }
     if (netHome.has(root)) {
@@ -1173,23 +1171,22 @@ function importSchematic(text) {
     }
   }
 
-  // battery beside the board -> rails (red +, black -)
+  // battery beside the board: + to the TOP rail, - to the BOTTOM rail
   const supply = addPart(DEF_BY_ID.get('pow5'), { x: BODY.x - 78, y: BODY.y + BODY.h * 0.5 });
   addWire({ port: [supply.uid, 'pos'] }, { hole: railHoleNear('T+', 3) }, '#d43c3c', 'wire');
-  addWire({ port: [supply.uid, 'neg'] }, { hole: railHoleNear('T-', 3) }, '#26262a', 'wire');
-  if (usedBottom) {   // bridge to the bottom rails only when something uses them
-    addWire({ hole: railHoleNear('T+', 61) }, { hole: railHoleNear('B+', 61) }, '#d43c3c', 'wire');
-    addWire({ hole: railHoleNear('T-', 61) }, { hole: railHoleNear('B-', 61) }, '#26262a', 'wire');
-  }
+  addWire({ port: [supply.uid, 'neg'] }, { hole: railHoleNear('B-', 3) }, '#26262a', 'wire');
 
-  // tap holes sit in a spare row of the pin's column (a=power top, d=jumper top)
-  const tapHole = (o, jumper) => `${o.col}${o.top ? (jumper ? 'd' : 'a') : (jumper ? 'g' : 'j')}`;
-  for (const t of powerPlus) addWire({ hole: tapHole(t, false) }, { hole: railHoleNear(t.top ? 'T+' : 'B+', t.col) }, '#d43c3c', 'wire');
-  for (const t of powerMinus) addWire({ hole: tapHole(t, false) }, { hole: railHoleNear(t.top ? 'T-' : 'B-', t.col) }, '#26262a', 'wire');
+  // power (+) always runs to the top rail, ground (-) to the bottom rail
+  // (opposite sides). Taps use a spare row in the pin's own column.
+  const plusTap = (o) => `${o.col}${o.top ? 'a' : 'f'}`;
+  const minusTap = (o) => `${o.col}${o.top ? 'e' : 'j'}`;
+  const jumpTap = (o) => `${o.col}${o.top ? 'd' : 'g'}`;
+  for (const t of powerPlus) addWire({ hole: plusTap(t) }, { hole: railHoleNear('T+', t.col) }, '#d43c3c', 'wire');
+  for (const t of powerMinus) addWire({ hole: minusTap(t) }, { hole: railHoleNear('B-', t.col) }, '#26262a', 'wire');
 
   let ci = 0;
   for (const j of jumpers) {
-    addWire({ hole: tapHole(j.a, true) }, { hole: tapHole(j.b, true) }, NET_COLORS[ci++ % NET_COLORS.length], 'wire');
+    addWire({ hole: jumpTap(j.a) }, { hole: jumpTap(j.b) }, NET_COLORS[ci++ % NET_COLORS.length], 'wire');
   }
 
   return `built ${placed.r} resistor(s), ${placed.led} LED(s), ${placed.sw} switch(es)`;
