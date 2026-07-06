@@ -201,16 +201,25 @@ body {
   cursor: pointer;
   font: 500 0.7rem 'Inter', sans-serif;
   letter-spacing: 0.04em;
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--fg);
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   padding: 7px 14px;
-  border-radius: 999px;
+  border-radius: 7px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   transition: background 0.15s, color 0.15s;
 }
 #canvas-tools button:hover { background: #fff; color: #000; }
+/* clear = compact square icon button (reset arrow) */
+#canvas-tools #btn-clear {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+#canvas-tools #btn-clear svg { display: block; }
 
 /* ---- zoom controls (bottom-left corner of the stage) ------------------- */
 #zoom-controls {
@@ -319,10 +328,10 @@ body {
   padding: 0;
 }
 .wb-plus {
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1;
   color: #111;
-  font-weight: 700;
+  font-weight: 300;
   pointer-events: none;
 }
 

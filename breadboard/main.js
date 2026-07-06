@@ -378,6 +378,18 @@ function buildInspector() {
       s.onchange = () => { inst.props.color = s.value; renderPart(inst); refreshSelBox(); saveSoon(); };
       row.appendChild(s);
     }
+    if (type === 'ic') {
+      const row = insRow(inspector, 'chip');
+      const s = document.createElement('select');
+      for (const d of CHIP_DEFS) {
+        const o = document.createElement('option');
+        o.value = d.id; o.textContent = d.name;
+        if (d.id === inst.def.id) o.selected = true;
+        s.appendChild(o);
+      }
+      s.onchange = () => { if (!changeChip(inst, s.value)) s.value = inst.def.id; };
+      row.appendChild(s);
+    }
     if (type === 'supply') {
       const row = insRow(inspector, 'volts');
       const inp = document.createElement('input');
@@ -453,6 +465,30 @@ function rerenderPartWires(uid) {
   for (const wr of state.wires) {
     if ((wr.a.port && wr.a.port[0] === uid) || (wr.b.port && wr.b.port[0] === uid)) renderWire(wr);
   }
+}
+
+// all chip variants (only the first is shown in the palette; the rest are
+// reachable via the inspector's chip picker)
+const CHIP_DEFS = CATALOG.filter((d) => d.sim && d.sim.type === 'ic');
+
+// swap a placed chip to a different variant, re-fitting its footprint in place
+function changeChip(inst, newId) {
+  const newDef = DEF_BY_ID.get(newId);
+  if (!newDef || newDef === inst.def) return false;
+  const a = HOLE_BY_ID.get(inst.holes[0]);
+  for (const id of inst.holes) occ.delete(id);
+  const fp = footprintAt(newDef, a.x, a.y, inst.rot || 0);
+  if (!fp.ok) { rebuildOcc(); return false; }   // not enough room — keep current chip
+  inst.def = newDef;
+  inst.holes = fp.holes;
+  inst.props = JSON.parse(JSON.stringify(newDef.props || {}));
+  inst.rt = {};
+  renderPart(inst);
+  rebuildOcc();
+  refreshSelBox();
+  buildInspector();
+  saveSoon();
+  return true;
 }
 
 // snap a board part to an absolute 90° step, validating the footprint
@@ -617,12 +653,13 @@ function buildThumb(def) {
 function buildGrid() {
   grid.innerHTML = '';
   for (const def of CATALOG) {
+    if (def.hidden) continue;                 // variants live behind the inspector picker
     const cell = document.createElement('div');
     cell.className = 'cell' + (def.kind === 'disabled' ? ' disabled' : '');
     cell.appendChild(buildThumb(def));
     const tip = document.createElement('div');
     tip.className = 'tip';
-    tip.textContent = def.name;
+    tip.textContent = def.paletteName || def.name;
     cell.appendChild(tip);
     cell.addEventListener('pointerdown', (e) => startPaletteDrag(e, def));
     grid.appendChild(cell);
@@ -929,23 +966,52 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 });
 document.getElementById('zoom-in').addEventListener('click', () => zoomStep(1));
 document.getElementById('zoom-out').addEventListener('click', () => zoomStep(-1));
+// Re-fit every frame while the parts panel slides so the board recenters
+// gradually in sync with the panel (instead of one jump at the end).
+let paletteAnim = 0;
 document.getElementById('menu-toggle').addEventListener('click', () => {
   document.getElementById('app').classList.toggle('palette-hidden');
-  setTimeout(fitView, 320);   // recenter once the panel finishes sliding
+  cancelAnimationFrame(paletteAnim);
+  const start = performance.now();
+  const step = (now) => {
+    fitView();                                  // stage width animates with the panel
+    if (now - start < 360) paletteAnim = requestAnimationFrame(step);
+  };
+  paletteAnim = requestAnimationFrame(step);
 });
 document.getElementById('projname').addEventListener('change', saveSoon);
 
 // ---------------------------------------------------------------- CircuitJS bridge
+// CircuitJS is now self-hosted (same origin), so we can read the drawn circuit
+// directly through its JS interface instead of asking the user to paste text.
 const schEl = document.getElementById('schematic');
+const schFrame = document.getElementById('sch-frame');
+let cjSim = null;
+function hookCircuitJS() {
+  try {
+    const win = schFrame.contentWindow;
+    if (!win) return;
+    if (win.CircuitJS1) cjSim = win.CircuitJS1;            // already booted
+    win.oncircuitjsloaded = () => { cjSim = win.CircuitJS1; };
+  } catch (_) { /* still loading */ }
+}
+schFrame.addEventListener('load', hookCircuitJS);
+hookCircuitJS();
+
 document.getElementById('btn-schematic').addEventListener('click', () => schEl.classList.toggle('open'));
 document.getElementById('sch-close').addEventListener('click', () => schEl.classList.remove('open'));
 document.getElementById('build-bb').addEventListener('click', () => {
   const status = document.getElementById('bridge-status');
+  if (!cjSim) hookCircuitJS();
+  if (!cjSim || typeof cjSim.exportCircuit !== 'function') {
+    status.textContent = 'simulator still loading \u2014 try again in a moment';
+    return;
+  }
   try {
-    status.textContent = importSchematic(document.getElementById('netlist').value);
+    status.textContent = importSchematic(cjSim.exportCircuit());
     fitView();
   } catch (err) {
-    status.textContent = 'could not parse that netlist';
+    status.textContent = 'could not read the circuit';
     console.error(err);
   }
 });
@@ -964,7 +1030,7 @@ function nearestResistorDef(ohms) {
 // components placed in a row, same-net pins joined by jumpers, power/ground to
 // the rails. Supported: resistor, LED, switch, voltage source (R/v), ground, wire.
 function importSchematic(text) {
-  if (!text || !text.trim()) return 'paste a CircuitJS netlist first';
+  if (!text || !text.trim()) return 'draw a circuit in the simulator first';
   document.getElementById('btn-clear').click();   // start from a clean board
 
   // union-find over element coordinates (shared coords / wires => one net)
@@ -974,22 +1040,41 @@ function importSchematic(text) {
   const uni = (a, b) => { add(a); add(b); const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
   const K = (x, y) => x + ',' + y;
 
-  const SUP = new Set(['w', 'r', 'g', 'R', 'v', '162', 's']);
+  // Accepts either CircuitJS's newer XML export or the legacy text netlist.
   const elems = [];
   let skipped = 0;
-  for (const raw of text.split(/\r?\n/)) {
-    const ln = raw.trim();
-    if (!ln) continue;
-    const tk = ln.split(/\s+/);
-    const type = tk[0];
-    if (type === '$' || type === 'o' || type === 'h' || type === '%' || type === 'B' || type === '38') continue;
-    if (!SUP.has(type)) { skipped++; continue; }
-    const x1 = +tk[1], y1 = +tk[2], x2 = +tk[3], y2 = +tk[4];
-    if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) continue;
+  const pushEl = (type, x1, y1, x2, y2, ohms) => {
+    if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) return;
     const a = K(x1, y1), b = K(x2, y2);
     add(a); add(b);
     if (type === 'w' || type === 'g') uni(a, b);
-    elems.push({ type, a, b, p: tk.slice(5) });
+    elems.push({ type, a, b, ohms });
+  };
+
+  if (text.trim().startsWith('<')) {
+    // XML: <cir> with <r/>, <LED/>, <s/>, <w/>, <g/>, <v/> children (x="x1 y1 x2 y2")
+    const TAG = { r: 'r', LED: 'led', s: 's', w: 'w', g: 'g', v: 'v' };
+    const doc = new DOMParser().parseFromString(text, 'text/xml');
+    for (const el of doc.querySelectorAll('*')) {
+      const tag = el.tagName;
+      if (tag === 'cir' || tag === 'parsererror') continue;
+      const c = (el.getAttribute('x') || '').trim().split(/\s+/).map(Number);
+      const type = TAG[tag];
+      if (!type) { if (c.length >= 4) skipped++; continue; }
+      pushEl(type, c[0], c[1], c[2], c[3], parseFloat(el.getAttribute('r')));
+    }
+  } else {
+    const SUP = new Set(['w', 'r', 'g', 'R', 'v', '162', 's']);
+    for (const raw of text.split(/\r?\n/)) {
+      const ln = raw.trim();
+      if (!ln) continue;
+      const tk = ln.split(/\s+/);
+      const t0 = tk[0];
+      if (t0 === '$' || t0 === 'o' || t0 === 'h' || t0 === '%' || t0 === 'B' || t0 === '38') continue;
+      if (!SUP.has(t0)) { skipped++; continue; }
+      const type = t0 === '162' ? 'led' : t0;
+      pushEl(type, +tk[1], +tk[2], +tk[3], +tk[4], type === 'r' ? parseFloat(tk[6]) : NaN);
+    }
   }
 
   // classify nets
@@ -1025,12 +1110,12 @@ function importSchematic(text) {
   const wrap = () => { if (col > 56) col = 6; };
   for (const e of elems) {
     if (e.type === 'r') {
-      const ohms = parseFloat(e.p[0]) || 1000;
+      const ohms = e.ohms || 1000;
       addPart(nearestResistorDef(ohms), { holes: [`${col}c`, `${col + 3}c`], props: { ohms } });
       connect(`${col}c`, e.a); connect(`${col + 3}c`, e.b);
       col += 5; placed.r++;
-    } else if (e.type === '162') {
-      addPart(DEF_BY_ID.get('led-red'), { holes: [`${col}c`, `${col + 1}c`] });
+    } else if (e.type === 'led') {
+      addPart(DEF_BY_ID.get('led'), { holes: [`${col}c`, `${col + 1}c`] });
       connect(`${col}c`, e.a); connect(`${col + 1}c`, e.b);
       col += 3; placed.led++;
     } else if (e.type === 's') {

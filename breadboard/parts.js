@@ -450,28 +450,20 @@ export const CATALOG = [
     thumb: { x: -8, y: -4, w: 2 * P + 16, h: 3 * P + 8 },
   },
 
-  // --- resistors (same photo, recolored per value so each reads distinctly)
-  rdef('r10k', 10000, '10 k\u03A9'),
-  rdef('r5k1', 5100, '5.1 k\u03A9', 'hue-rotate(200deg) saturate(1.25)'),
-  rdef('r2k', 2000, '2 k\u03A9', 'hue-rotate(95deg) saturate(1.1)'),
-  rdef('r1k', 1000, '1 k\u03A9', 'hue-rotate(300deg) saturate(1.15)'),
-  rdef('r536', 536, '536 \u03A9', 'hue-rotate(30deg) saturate(1.2)'),
-  rdef('r510', 510, '510 \u03A9', 'hue-rotate(160deg) saturate(1.15)'),
-  rdef('r200', 200, '200 \u03A9', 'hue-rotate(245deg) saturate(1.2)'),
+  // --- resistor (single item; edit the resistance once placed/selected)
+  rdef('resistor', 1000, 'resistor'),
 
-  // --- leds (photo in the tray, vector on the board so legs plug into holes)
-  ledDef('led-red', 'red', 'red'),
-  ledDef('led-green', 'green', 'green', 'hue-rotate(108deg) saturate(2) brightness(1.3)'),
-  ledDef('led-yellow', 'yellow', 'yellow', 'hue-rotate(62deg) saturate(2) brightness(1.45)'),
+  // --- led (single item; edit the colour once placed/selected)
+  ledDef('led', 'red', 'LED'),
 
-  // --- ics
-  dipDef('hc14', 'SN74HC14N inverter', 7, 3, 'SN74HC14N', 'hc14', HC14, 'hex inverter'),
-  dipDef('hc08', 'SN74HC08N AND', 7, 3, 'SN74HC08N', 'hc08', HC08, 'quad AND'),
-  dipDef('hc32', 'SN74HC32N OR', 7, 3, 'SN74HC32N', 'hc32', HC32, 'quad OR'),
-  dipDef('hc283', 'CD74HC283E adder', 8, 3, 'CD74HC283E', 'hc283', HC283, '4-bit adder'),
-  dipDef('hc153', 'SN74HC153N mux', 8, 3, 'SN74HC153N', 'hc153', HC153, 'dual 4:1 mux'),
-  dipDef('cd4013', 'CD4013BE flip-flop', 7, 3, 'CD4013BE', 'cd4013', CD4013, 'dual D-FF'),
-  dipDef('ne555', 'NE555P timer', 4, 3, 'NE555P', 'ne555', NE555, 'timer'),
+  // --- ics (single palette item; pick the chip once placed/selected)
+  { ...dipDef('hc14', 'SN74HC14N inverter', 7, 3, 'SN74HC14N', 'hc14', HC14, 'hex inverter'), paletteName: 'logic chip' },
+  { ...dipDef('hc08', 'SN74HC08N AND', 7, 3, 'SN74HC08N', 'hc08', HC08, 'quad AND'), hidden: true },
+  { ...dipDef('hc32', 'SN74HC32N OR', 7, 3, 'SN74HC32N', 'hc32', HC32, 'quad OR'), hidden: true },
+  { ...dipDef('hc283', 'CD74HC283E adder', 8, 3, 'CD74HC283E', 'hc283', HC283, '4-bit adder'), hidden: true },
+  { ...dipDef('hc153', 'SN74HC153N mux', 8, 3, 'SN74HC153N', 'hc153', HC153, 'dual 4:1 mux'), hidden: true },
+  { ...dipDef('cd4013', 'CD4013BE flip-flop', 7, 3, 'CD4013BE', 'cd4013', CD4013, 'dual D-FF'), hidden: true },
+  { ...dipDef('ne555', 'NE555P timer', 4, 3, 'NE555P', 'ne555', NE555, 'timer'), hidden: true },
 
   // --- power (single source): a free 9V battery wired to the board
   {
