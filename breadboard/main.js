@@ -167,7 +167,7 @@ function renderPart(inst) {
 function positionPart(inst) {
   if (inst.def.kind === 'board') {
     const a = HOLE_BY_ID.get(inst.holes[0]);
-    inst.g.setAttribute('transform', `translate(${a.x},${a.y}) rotate(${inst.rot * 90})`);
+    inst.g.setAttribute('transform', `translate(${a.x},${a.y}) rotate(${(inst.rot || 0) * 90})`);
   } else {
     if (inst.x == null) inst.x = 0;
     if (inst.y == null) inst.y = 0;
@@ -1026,12 +1026,30 @@ function nearestResistorDef(ohms) {
   return best;
 }
 
-// Parse a CircuitJS "Export As Text" netlist and lay out a functional breadboard:
-// components placed in a row, same-net pins joined by jumpers, power/ground to
-// the rails. Supported: resistor, LED, switch, voltage source (R/v), ground, wire.
+// nearest hole on a power rail to a given column (rails run in groups of 5)
+function railHoleNear(rail, col) {
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < 50; i++) {
+    const rc = 2 + i + Math.floor(i / 5);
+    const d = Math.abs(rc - col);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return `${rail}${best}`;
+}
+const NET_COLORS = ['#3fa54a', '#2f6fed', '#e07b39', '#8e44ad', '#16a085', '#e8b53a'];
+const UNSUP_NAMES = {
+  c: 'capacitor', l: 'inductor', d: 'diode', t: 'transistor', f: 'MOSFET',
+  a: 'op-amp', I: 'logic gate', L: 'logic input', M: 'logic output', T: 'transformer',
+};
+
+// Translate a CircuitJS circuit into a clean breadboard. Supported parts:
+// resistor, LED, switch, voltage source, ground, wire. If the circuit contains
+// any other part we refuse (rather than silently dropping it and producing a
+// broken board). Layout: components in a tidy row (pins in row b), power/ground
+// taps run to the nearest rail, and each internal net is chained with short
+// colour-coded jumpers.
 function importSchematic(text) {
   if (!text || !text.trim()) return 'draw a circuit in the simulator first';
-  document.getElementById('btn-clear').click();   // start from a clean board
 
   // union-find over element coordinates (shared coords / wires => one net)
   const parent = new Map();
@@ -1042,7 +1060,7 @@ function importSchematic(text) {
 
   // Accepts either CircuitJS's newer XML export or the legacy text netlist.
   const elems = [];
-  let skipped = 0;
+  const unsupported = new Set();
   const pushEl = (type, x1, y1, x2, y2, ohms) => {
     if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) return;
     const a = K(x1, y1), b = K(x2, y2);
@@ -1060,7 +1078,7 @@ function importSchematic(text) {
       if (tag === 'cir' || tag === 'parsererror') continue;
       const c = (el.getAttribute('x') || '').trim().split(/\s+/).map(Number);
       const type = TAG[tag];
-      if (!type) { if (c.length >= 4) skipped++; continue; }
+      if (!type) { if (c.length >= 4) unsupported.add(UNSUP_NAMES[tag] || tag); continue; }
       pushEl(type, c[0], c[1], c[2], c[3], parseFloat(el.getAttribute('r')));
     }
   } else {
@@ -1071,66 +1089,110 @@ function importSchematic(text) {
       const tk = ln.split(/\s+/);
       const t0 = tk[0];
       if (t0 === '$' || t0 === 'o' || t0 === 'h' || t0 === '%' || t0 === 'B' || t0 === '38') continue;
-      if (!SUP.has(t0)) { skipped++; continue; }
+      if (!SUP.has(t0)) { unsupported.add(UNSUP_NAMES[t0] || t0); continue; }
       const type = t0 === '162' ? 'led' : t0;
       pushEl(type, +tk[1], +tk[2], +tk[3], +tk[4], type === 'r' ? parseFloat(tk[6]) : NaN);
     }
   }
 
-  // classify nets
+  // refuse rather than build a broken board from a partial circuit
+  if (unsupported.size) {
+    return `can't build \u2014 unsupported part(s): ${[...unsupported].join(', ')}. supported: resistor, LED, switch, power, ground.`;
+  }
+  if (!elems.some((e) => e.type === 'r' || e.type === 'led' || e.type === 's')) {
+    return 'nothing to build \u2014 add a resistor, LED, or switch';
+  }
+
+  document.getElementById('btn-clear').click();   // OK to build: clean the board
+
+  // classify nets (voltage source defines + / -)
   const ground = new Set(), plus = new Set();
   for (const e of elems) {
     if (e.type === 'g') ground.add(find(e.a));
-    if (e.type === 'R') plus.add(find(e.a));
     if (e.type === 'v') { plus.add(find(e.b)); ground.add(find(e.a)); }
   }
-  const isGround = (c) => ground.has(find(c));
-  const isPlus = (c) => plus.has(find(c)) && !isGround(c);
+  const isGroundR = (root) => ground.has(root);
+  const isPlusR = (root) => plus.has(root) && !ground.has(root);
 
-  // rails: spread taps across rail holes (all one net each)
-  let pr = 4, mr = 4;
-  const nextPlus = () => `T+${Math.min(49, pr++)}`;
-  const nextMinus = () => `T-${Math.min(49, mr++)}`;
-
-  // free battery placed beside the board, terminals wired to the rails
-  const supply = addPart(DEF_BY_ID.get('pow5'), { x: BODY.x - 78, y: BODY.y + BODY.h * 0.5 });
-  addWire({ port: [supply.uid, 'pos'] }, { hole: nextPlus() }, '#d43c3c', 'wire');
-  addWire({ port: [supply.uid, 'neg'] }, { hole: nextMinus() }, '#26262a', 'wire');
-
-  const anchor = new Map();
-  const connect = (hole, coord) => {
-    if (isGround(coord)) { addWire({ hole }, { hole: nextMinus() }, '#26262a', 'wire'); return; }
-    if (isPlus(coord)) { addWire({ hole }, { hole: nextPlus() }, '#d43c3c', 'wire'); return; }
-    const r = find(coord);
-    if (anchor.has(r)) addWire({ hole }, { hole: anchor.get(r) }, '#3fa54a', 'wire');
-    else anchor.set(r, hole);
+  // Convention-following layout: series-connected parts share the breadboard
+  // column of the node between them (so no jumper is needed there); power and
+  // ground tap the nearest rail (red / black); only genuine branches get a
+  // coloured jumper. Consecutive parts alternate rows b/c so a shared column
+  // holds both their legs in different holes.
+  const netHome = new Map();      // internal net root -> {col, top}
+  const powerPlus = [], powerMinus = [], jumpers = [];
+  let usedBottom = false;
+  const registerNet = (root, col, top) => {
+    if (!top) usedBottom = true;
+    if (isGroundR(root)) { powerMinus.push({ col, top }); return; }
+    if (isPlusR(root)) { powerPlus.push({ col, top }); return; }
+    if (netHome.has(root)) {
+      const h = netHome.get(root);
+      if (h.col !== col || h.top !== top) jumpers.push({ a: h, b: { col, top } });
+    } else netHome.set(root, { col, top });
   };
 
-  let col = 6, placed = { r: 0, led: 0, sw: 0 };
-  const wrap = () => { if (col > 56) col = 6; };
+  const ROWS = ['b', 'c'];
+  let col = 3, rowIdx = 0, prevRightNet = null, prevRightCol = null;
+  const placed = { r: 0, led: 0, sw: 0 };
+
   for (const e of elems) {
-    if (e.type === 'r') {
-      const ohms = e.ohms || 1000;
-      addPart(nearestResistorDef(ohms), { holes: [`${col}c`, `${col + 3}c`], props: { ohms } });
-      connect(`${col}c`, e.a); connect(`${col + 3}c`, e.b);
-      col += 5; placed.r++;
-    } else if (e.type === 'led') {
-      addPart(DEF_BY_ID.get('led'), { holes: [`${col}c`, `${col + 1}c`] });
-      connect(`${col}c`, e.a); connect(`${col + 1}c`, e.b);
-      col += 3; placed.led++;
+    if (e.type === 'r' || e.type === 'led') {
+      const netA = find(e.a), netB = find(e.b);
+      const span = e.type === 'r' ? 3 : 1;
+      const symmetric = e.type === 'r';   // resistors have no polarity; LEDs do
+      // continue the series chain by re-using the previous part's right column
+      let shareLeft = false, swapAB = false;
+      if (prevRightNet !== null) {
+        if (netA === prevRightNet) shareLeft = true;
+        else if (symmetric && netB === prevRightNet) { shareLeft = true; swapAB = true; }
+      }
+      const leftCol = shareLeft ? prevRightCol : col;
+      const rightCol = leftCol + span;
+      const row = ROWS[rowIdx % ROWS.length];
+      const aCol = swapAB ? rightCol : leftCol;   // pin a (e.a) column
+      const bCol = swapAB ? leftCol : rightCol;   // pin b (e.b) column
+      const def = e.type === 'r' ? nearestResistorDef(e.ohms || 1000) : DEF_BY_ID.get('led');
+      const opts = { holes: [`${aCol}${row}`, `${bCol}${row}`], rot: 0 };
+      if (e.type === 'r') opts.props = { ohms: e.ohms || 1000 };
+      addPart(def, opts);
+      registerNet(netA, aCol, true);
+      registerNet(netB, bCol, true);
+      prevRightNet = swapAB ? netA : netB;
+      prevRightCol = rightCol;
+      col = Math.max(col, rightCol) + 1;
+      rowIdx++;
+      placed[e.type === 'r' ? 'r' : 'led']++;
     } else if (e.type === 's') {
-      addPart(DEF_BY_ID.get('button'), { holes: [`${col}e`, `${col + 2}e`, `${col}f`, `${col + 2}f`] });
-      connect(`${col}e`, e.a); connect(`${col}f`, e.b);
-      col += 4; placed.sw++;
+      const c0 = col;
+      addPart(DEF_BY_ID.get('button'), { holes: [`${c0}e`, `${c0 + 2}e`, `${c0}f`, `${c0 + 2}f`], rot: 0 });
+      registerNet(find(e.a), c0, true);
+      registerNet(find(e.b), c0, false);
+      col = c0 + 4; prevRightNet = null; prevRightCol = null;
+      placed.sw++;
     }
-    wrap();
   }
 
-  const parts = placed.r + placed.led + placed.sw;
-  if (parts === 0) return skipped ? `no supported parts found (${skipped} unsupported skipped)` : 'no components found in netlist';
-  let msg = `built ${placed.r} resistor(s), ${placed.led} LED(s), ${placed.sw} switch(es)`;
-  if (skipped) msg += ` \u00b7 ${skipped} unsupported part(s) skipped`;
-  return msg;
+  // battery beside the board -> rails (red +, black -)
+  const supply = addPart(DEF_BY_ID.get('pow5'), { x: BODY.x - 78, y: BODY.y + BODY.h * 0.5 });
+  addWire({ port: [supply.uid, 'pos'] }, { hole: railHoleNear('T+', 3) }, '#d43c3c', 'wire');
+  addWire({ port: [supply.uid, 'neg'] }, { hole: railHoleNear('T-', 3) }, '#26262a', 'wire');
+  if (usedBottom) {   // bridge to the bottom rails only when something uses them
+    addWire({ hole: railHoleNear('T+', 61) }, { hole: railHoleNear('B+', 61) }, '#d43c3c', 'wire');
+    addWire({ hole: railHoleNear('T-', 61) }, { hole: railHoleNear('B-', 61) }, '#26262a', 'wire');
+  }
+
+  // tap holes sit in a spare row of the pin's column (a=power top, d=jumper top)
+  const tapHole = (o, jumper) => `${o.col}${o.top ? (jumper ? 'd' : 'a') : (jumper ? 'g' : 'j')}`;
+  for (const t of powerPlus) addWire({ hole: tapHole(t, false) }, { hole: railHoleNear(t.top ? 'T+' : 'B+', t.col) }, '#d43c3c', 'wire');
+  for (const t of powerMinus) addWire({ hole: tapHole(t, false) }, { hole: railHoleNear(t.top ? 'T-' : 'B-', t.col) }, '#26262a', 'wire');
+
+  let ci = 0;
+  for (const j of jumpers) {
+    addWire({ hole: tapHole(j.a, true) }, { hole: tapHole(j.b, true) }, NET_COLORS[ci++ % NET_COLORS.length], 'wire');
+  }
+
+  return `built ${placed.r} resistor(s), ${placed.led} LED(s), ${placed.sw} switch(es)`;
 }
 
 // ---------------------------------------------------------------- sim + dynamic render loop

@@ -199,27 +199,27 @@ body {
 #canvas-tools button {
   border: none;
   cursor: pointer;
-  font: 500 0.7rem 'Inter', sans-serif;
+  font: 500 0.62rem 'Inter', sans-serif;
   letter-spacing: 0.04em;
   color: var(--fg);
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 7px 14px;
-  border-radius: 7px;
+  padding: 5px 10px;
+  border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   transition: background 0.15s, color 0.15s;
 }
 #canvas-tools button:hover { background: #fff; color: #000; }
 /* clear = compact square icon button (reset arrow) */
 #canvas-tools #btn-clear {
-  width: 28px;
-  height: 28px;
+  width: 23px;
+  height: 23px;
   padding: 0;
   display: grid;
   place-items: center;
 }
-#canvas-tools #btn-clear svg { display: block; }
+#canvas-tools #btn-clear svg { display: block; width: 13px; height: 13px; }
 
 /* ---- zoom controls (bottom-left corner of the stage) ------------------- */
 #zoom-controls {
