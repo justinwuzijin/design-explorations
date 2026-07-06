@@ -401,8 +401,7 @@ function dipDef(id, name, half, spanRows, label, icType, names, sub) {
     sim: { type: 'ic', icType },
     props: {},
     draw: (g) => drawDIP(g, half, spanRows, label, sub),
-    img: 'img/ic.png',
-    imgBox: { x: -0.5 * P, y: -6, w: (half - 1) * P + P, h: spanRows * P + 12 },
+    thumbImg: 'img/ic.png',   // photo in the tray; vector on the board so legs land in the holes
     thumb: { x: -12, y: -8, w: (half - 1) * P + 24, h: spanRows * P + 16 },
   };
 }
@@ -428,14 +427,16 @@ const rdef = (id, value, name, filter = '') => ({
   thumb: { x: -4, y: -14, w: 3 * P + 8, h: 28 },
 });
 
-const ledDef = (id, color, name, filter = '') => ({
+// Palette shows the LED photo; on the canvas it draws as vector so its two leads
+// sit exactly on the pin holes (the side-view photo's splayed legs can't align
+// to two adjacent holes).
+const ledDef = (id, color, name, thumbFilter = '') => ({
   id, cat: 'leds', name, kind: 'board',
   pins: [{ x: 0, y: 0, name: 'a' }, { x: 1, y: 0, name: 'k' }],
   sim: { type: 'led' },
   props: { color },
   draw: drawLED,
-  img: 'img/led.png', filter,               // same LED photo, hue-shifted per color
-  imgBox: { x: -11, y: -34, w: P + 22, h: 44 },
+  thumbImg: 'img/led.png', thumbFilter,
   thumb: { x: -10, y: -12, w: P + 20, h: 30 },
 });
 
@@ -445,8 +446,7 @@ export const CATALOG = [
     id: 'button', cat: 'switches', name: 'push button', kind: 'board',
     pins: [{ x: 0, y: 0, name: 'a1' }, { x: 2, y: 0, name: 'a2' }, { x: 0, y: 3, name: 'b1' }, { x: 2, y: 3, name: 'b2' }],
     sim: { type: 'button' }, props: {},
-    draw: drawTactile, img: 'img/button.png',
-    imgBox: { x: -8, y: -6, w: 2 * P + 16, h: 3 * P + 12 },
+    draw: drawTactile, thumbImg: 'img/button.png',   // photo in the tray; vector on the board so pins land in the holes
     thumb: { x: -8, y: -4, w: 2 * P + 16, h: 3 * P + 8 },
   },
 
@@ -459,7 +459,7 @@ export const CATALOG = [
   rdef('r510', 510, '510 \u03A9', 'hue-rotate(160deg) saturate(1.15)'),
   rdef('r200', 200, '200 \u03A9', 'hue-rotate(245deg) saturate(1.2)'),
 
-  // --- leds (same photo, hue-shifted per colour)
+  // --- leds (photo in the tray, vector on the board so legs plug into holes)
   ledDef('led-red', 'red', 'red'),
   ledDef('led-green', 'green', 'green', 'hue-rotate(108deg) saturate(2) brightness(1.3)'),
   ledDef('led-yellow', 'yellow', 'yellow', 'hue-rotate(62deg) saturate(2) brightness(1.45)'),
@@ -475,7 +475,7 @@ export const CATALOG = [
 
   // --- power (single source): a free 9V battery wired to the board
   {
-    id: 'pow5', cat: 'power', name: '9V battery (power source)', kind: 'free',
+    id: 'pow5', cat: 'power', name: '9V battery', kind: 'free',
     ports: [{ x: 10, y: -18, name: 'pos' }, { x: 36, y: -18, name: 'neg' }],
     sim: { type: 'supply', volts: 5 }, props: { volts: 5 },
     draw: drawBattery,

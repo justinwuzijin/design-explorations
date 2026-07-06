@@ -1,7 +1,7 @@
 // Breadboard simulator: palette, placement, wiring, inspector, sim loop.
 
 import { P, E, BODY, buildBoard, nearestHole, HOLE_BY_ID, baseNetOf } from './board.js';
-import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js';
+import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=14';
 import { runSim, portNode } from './sim.js';
 
 const svg = document.getElementById('canvas');
@@ -13,6 +13,7 @@ const fxL = document.getElementById('fxL');
 const stage = document.getElementById('stage');
 const hintEl = document.getElementById('hint');
 const inspector = document.getElementById('inspector');
+const zoomPct = document.getElementById('zoom-pct');
 
 // ---------------------------------------------------------------- state
 const state = { parts: [], wires: [], uid: 1 };
@@ -27,6 +28,20 @@ buildBoard(boardL);
 // ---------------------------------------------------------------- view
 function applyView() {
   world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
+  if (zoomPct) zoomPct.textContent = `${Math.round(view.k * 100)}%`;
+}
+
+// zoom in/out in 10% steps, anchored on the canvas center
+function zoomStep(dir) {
+  const cx = stage.clientWidth / 2, cy = stage.clientHeight / 2;
+  const k0 = view.k;
+  let k1 = Math.min(3, Math.max(0.4, Math.round(k0 * 10) / 10 + dir * 0.1));
+  if (k1 === k0) return;
+  view.x = cx - ((cx - view.x) / k0) * k1;
+  view.y = cy - ((cy - view.y) / k0) * k1;
+  view.k = k1;
+  applyView();
+  refreshSelBox();
 }
 function fitView() {
   const w = stage.clientWidth, h = stage.clientHeight;
@@ -509,7 +524,7 @@ const wbColorInput = document.getElementById('wb-color');
 const wbCustom = wbColorInput.closest('.wb-custom');
 
 // Dock-style proximity magnification: swatches swell as the cursor nears them.
-const MAG_MAX = 1.9;     // peak scale directly under the cursor
+const MAG_MAX = 1.45;    // peak scale directly under the cursor
 const MAG_RADIUS = 66;   // px of horizontal influence around the cursor
 let magPointerX = null;  // last cursor x while hovering the bar (null = away)
 
@@ -522,15 +537,18 @@ function baseScaleOf(el) {
 }
 function updateMagnify() {
   for (const el of magItems()) {
+    const base = baseScaleOf(el);          // selected rests bigger, always centered
     let mag = 1;
-    if (magPointerX != null) {
+    if (magPointerX != null) {             // proximity swell is a hover-only effect
       const r = el.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const t = Math.max(0, 1 - Math.abs(magPointerX - cx) / MAG_RADIUS);
-      const s = t * t * (3 - 2 * t); // smoothstep falloff
+      const s = t * t * (3 - 2 * t);       // smoothstep falloff
       mag = 1 + (MAG_MAX - 1) * s;
     }
-    el.style.transform = `scale(${Math.max(baseScaleOf(el), mag)})`;
+    // Always grow from the center so nothing pops up out of the bar.
+    el.style.transformOrigin = 'center center';
+    el.style.transform = `scale(${Math.max(base, mag)})`;
   }
 }
 
@@ -577,16 +595,20 @@ function thumbSVG(def) {
   return s;
 }
 
-// Parts with a real photo (`img`) show it in the tray; `filter` recolors it
-// (hue-shift) so colour/value variants read distinctly from the same image.
+// Palette thumbnails prefer a real photo. `thumbImg` shows a photo ONLY in the
+// tray while the part still draws as vector on the canvas (so its legs snap into
+// the holes); `img` shows the photo in both places. `filter`/`thumbFilter`
+// hue-shift the photo so colour/value variants read distinctly.
 function buildThumb(def) {
-  if (def.img) {
+  const img = def.thumbImg || def.img;
+  if (img) {
     const im = document.createElement('img');
     im.className = 'thumb-img';
-    im.src = def.img;
+    im.src = img;
     im.alt = def.name;
     im.draggable = false;
-    if (def.filter) im.style.filter = def.filter;
+    const filter = def.thumbFilter || def.filter;
+    if (filter) im.style.filter = filter;
     return im;
   }
   return thumbSVG(def);
@@ -905,7 +927,8 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   rebuildOcc();
   save();
 });
-document.getElementById('btn-fit').addEventListener('click', fitView);
+document.getElementById('zoom-in').addEventListener('click', () => zoomStep(1));
+document.getElementById('zoom-out').addEventListener('click', () => zoomStep(-1));
 document.getElementById('menu-toggle').addEventListener('click', () => {
   document.getElementById('app').classList.toggle('palette-hidden');
   setTimeout(fitView, 320);   // recenter once the panel finishes sliding

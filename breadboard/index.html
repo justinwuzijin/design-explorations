@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=12" />
+  <link rel="stylesheet" href="style.css?v=15" />
 </head>
 <body>
 
@@ -147,6 +147,15 @@
           <input type="color" id="wb-color" value="#3fa54a" />
         </label>
       </div>
+      <div id="canvas-tools">
+        <button id="btn-schematic" title="open CircuitJS schematic">schematic</button>
+        <button id="btn-clear" title="remove everything">clear</button>
+      </div>
+      <div id="zoom-controls">
+        <button id="zoom-out" title="zoom out" aria-label="zoom out">&#8722;</button>
+        <span id="zoom-pct">100%</span>
+        <button id="zoom-in" title="zoom in" aria-label="zoom in">+</button>
+      </div>
       <div id="inspector" hidden></div>
     </div>
   </div>
@@ -167,6 +176,6 @@
     </div>
   </aside>
 
-  <script type="module" src="main.js?v=12"></script>
+  <script type="module" src="main.js?v=16"></script>
 </body>
 </html>

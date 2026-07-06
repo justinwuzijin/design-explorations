@@ -69,15 +69,15 @@ body {
 /* ---- layout ------------------------------------------------------------- */
 #app { flex: 1; display: flex; min-height: 0; overflow: hidden; position: relative; }
 
-/* ---- hanging menu tab (top-right corner of the parts panel) ------------- */
+/* ---- side flap toggle (hangs off the parts panel's right edge) ---------- */
 #menu-toggle {
   position: absolute;
-  top: 0;
-  /* hang from the top-right corner of the parts panel */
-  left: calc(clamp(180px, 16.5vw, 250px) - 50px);
+  top: 50%;
+  /* sits flush on the panel's right edge, sticking out to the right */
+  left: clamp(180px, 16.5vw, 250px);
   z-index: 40;
-  width: 36px;
-  height: 30px;
+  width: 26px;
+  height: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -86,20 +86,23 @@ body {
   color: rgba(0, 0, 0, 0.5);
   background: #ffffff;
   border: 1px solid var(--rule);
-  border-top: none;
-  border-radius: 0 0 11px 11px;
-  box-shadow: 0 4px 9px rgba(0, 0, 0, 0.13);
-  transform-origin: 50% 0;
+  border-left: none;
+  border-radius: 0 11px 11px 0;
+  box-shadow: 3px 0 9px rgba(0, 0, 0, 0.13);
+  transform: translateY(-50%);
+  transform-origin: 0 50%;
   transition: transform 0.34s cubic-bezier(.34, 1.4, .5, 1), box-shadow 0.24s ease,
     color 0.15s, background 0.15s, left 0.3s ease;
 }
 #menu-toggle:hover {
   color: #000;
-  transform: translateY(3px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.18);
+  transform: translateY(-50%) translateX(3px);
+  box-shadow: 6px 0 14px rgba(0, 0, 0, 0.18);
 }
-#menu-toggle:active { transform: translateY(1px) scale(0.97); }
+#menu-toggle:active { transform: translateY(-50%) translateX(1px) scale(0.97); }
 #menu-toggle svg { display: block; }
+/* when the panel is tucked away, the flap rides to the screen's left edge */
+#app.palette-hidden #menu-toggle { left: 0; }
 
 /* ---- palette ------------------------------------------------------------ */
 #palette {
@@ -119,15 +122,13 @@ body {
 }
 #grid {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 4px;
   padding: 14px 10px 24px;
   align-content: start;
 }
-#grid::-webkit-scrollbar { width: 8px; }
-#grid::-webkit-scrollbar-thumb { background: #ddd9d1; border-radius: 4px; }
 
 .cell {
   position: relative;
@@ -149,14 +150,17 @@ body {
 .cell:focus, .cell:focus-visible, .cell:active, .cell:hover { outline: none; border: none; background: none; }
 .cell svg:focus { outline: none; }
 .cell:active { cursor: grabbing; }
-.cell svg { width: 78%; height: 78%; overflow: visible; pointer-events: none; }
+.cell svg { width: 78%; height: 78%; overflow: visible; pointer-events: none; transition: transform 0.12s ease-out; }
 .cell .thumb-img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
   mix-blend-mode: multiply;
+  transition: transform 0.12s ease-out;
 }
+.cell:not(.disabled):hover svg,
+.cell:not(.disabled):hover .thumb-img { transform: scale(1.12); }
 .cell.disabled { opacity: 0.45; cursor: default; }
 .cell .tip {
   position: absolute;
@@ -182,6 +186,74 @@ body {
 
 /* ---- stage -------------------------------------------------------------- */
 #stage { flex: 1; position: relative; min-width: 0; background: var(--bg); }
+
+/* ---- canvas tools (bottom-right corner of the stage) -------------------- */
+#canvas-tools {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 12;
+  display: flex;
+  gap: 6px;
+}
+#canvas-tools button {
+  border: none;
+  cursor: pointer;
+  font: 500 0.7rem 'Inter', sans-serif;
+  letter-spacing: 0.04em;
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 7px 14px;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition: background 0.15s, color 0.15s;
+}
+#canvas-tools button:hover { background: #fff; color: #000; }
+
+/* ---- zoom controls (bottom-left corner of the stage) ------------------- */
+#zoom-controls {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#zoom-controls button {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border: none;
+  cursor: pointer;
+  font: 500 0.9rem 'Inter', sans-serif;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition: background 0.15s, color 0.15s;
+}
+#zoom-controls button:hover { background: #fff; color: #000; }
+#zoom-pct {
+  min-width: 40px;
+  text-align: center;
+  font: 500 0.64rem 'Inter', sans-serif;
+  letter-spacing: 0.03em;
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 8px;
+  padding: 6px 7px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  user-select: none;
+}
 #canvas {
   width: 100%;
   height: 100%;
@@ -220,7 +292,7 @@ body {
   height: 18px;
   border-radius: 50%;
   cursor: pointer;
-  transform-origin: center bottom;
+  transform-origin: center center;
   transition: transform 0.08s ease-out;
   will-change: transform;
 }
@@ -232,7 +304,7 @@ body {
   cursor: pointer;
   display: grid;
   place-items: center;
-  transform-origin: center bottom;
+  transform-origin: center center;
   transition: transform 0.08s ease-out;
   will-change: transform;
 }

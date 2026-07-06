@@ -1,0 +1,168 @@
+	for (iter = 1; ; iter++) {
+	    int mcount = 0, scount = 0;
+	    if (goodIterations >= 3 && timeStep < maxTimeStep) {
+		// things are going well, double the time step
+		timeStep = Math.min(timeStep*2, maxTimeStep);
+		console("timestep up = " + timeStep + " at " + t);
+		stampCircuit();
+		goodIterations = 0;
+	    }
+	    if (TestManager.theManager != null)
+		timeStep = TestManager.theManager.clampTimeStep(t, timeStep);
+
+	    int i, j, subiter;
+	    for (i = 0; i != elmArr.length; i++)
+		elmArr[i].startIteration();
+	    app.ui.steps++;
+	    int subiterCount = (adjustTimeStep && timeStep/2 > minTimeStep) ? 100 : 5000;
+	    for (subiter = 0; subiter != subiterCount; subiter++) {
+		converged = true;
+		subIterations = subiter;
+		// carry forward needsSolve from previous subiter: if a matrix was solved last
+		// subiter, its conditional elements need to react to the updated voltages.
+		// force all on firstIterAfterStamp.
+		for (int mi = 0; mi != matrices.length; mi++) {
+		    matrices[mi].needsSolve = firstIterAfterStamp || matrices[mi].nodeVoltagesChanged;
+		    matrices[mi].nodeVoltagesChanged = false;
+		}
+		firstIterAfterStamp = false;
+		// restore rightSide and matrix to stamped baseline
+		for (int mi = 0; mi != matrices.length; mi++) {
+		    CircuitMatrix m = matrices[mi];
+		    for (i = 0; i != m.size; i++)
+			m.rightSide[i] = m.origRightSide[i];
+		    if (m.nonLinear) {
+			for (i = 0; i != m.size; i++)
+			    for (j = 0; j != m.size; j++)
+				m.matrix[i][j] = m.origMatrix[i][j];
+		    }
+		}
+		// run all elements before solving any matrix (preserves ripple-counter timing)
+		for (i = 0; i != alwaysRunArr.length; i++) {
+		    alwaysRunArr[i].doStep();
+		    scount++;
+		}
+		// run conditional elements only for matrices that need solving
+		for (i = 0; i != conditionalArr.length; i++)
+		    conditionalArr[i].ranThisSubiter = false;
+		for (int mi = 0; mi != matrices.length; mi++) {
+		    CircuitMatrix m = matrices[mi];
+		    if (!m.needsSolve) continue;
+		    for (j = 0; j < m.stampedBy.size(); j++) {
+			CircuitElm ce = m.stampedBy.get(j);
+			if (ce.ranThisSubiter) continue;
+			ce.ranThisSubiter = true;
+			ce.doStep();
+			scount++;
+		    }
+		}
+		if (app.stopMessage != null)
+		    return;
+		boolean printit = debugprint;
+		debugprint = false;
+		for (int mi = 0; mi != matrices.length; mi++) {
+		    CircuitMatrix m = matrices[mi];
+		    if (app.stopMessage != null)
+			return;
+		    // skip linear matrices whose right side didn't change
+		    if (!m.nonLinear && !m.needsSolve)
+			continue;
+		    if (m.size < 8) {
+			for (j = 0; j != m.size; j++) {
+			    for (i = 0; i != m.size; i++) {
+				double x = m.matrix[i][j];
+				if (Double.isNaN(x) || Double.isInfinite(x)) {
+				    stop("nan/infinite matrix!", null);
+				    console("matrix " + mi + " [" + i + "][" + j + "] is " + x);
+				    return;
+				}
+			    }
+			}
+		    }
+		    if (printit) {
+			console("matrix " + mi + ":");
+			for (j = 0; j != m.size; j++) {
+			    String x = "";
+			    for (i = 0; i != m.size; i++)
+				x += m.matrix[j][i] + ",";
+			    x += "\n";
+			    console(x);
+			}
+		    }
+		    // save right side before lu_solve overwrites it with the solution
+		    System.arraycopy(m.rightSide, 0, m.savedRightSide, 0, m.size);
+		    mcount++;
+		    if (m.nonLinear) {
+			if (converged && subiter > 0)
+			    continue;
+			if (!lu_factor(m.matrix, m.size, m.permute, m)) {
+			    stop("Singular matrix!", null);
+			    return;
+			}
+		    }
+		    lu_solve(m.matrix, m.size, m.permute, m.rightSide, m);
+		    applySolvedRightSide(m);
+		}
+
+		if (printit)
+		    console("done");
+		//console("mcount = " + mcount + ", scount = " + scount + ", ara = " + alwaysRunArr.length + ", cond = " + conditionalArr.length);
+		if (!circuitNonLinear)
+		    break;
+		if (converged && subiter > 0)
+		    break;
+	    }
+	    if (subiter == subiterCount) {
+		// convergence failed
+		goodIterations = 0;
+		if (adjustTimeStep) {
+		    timeStep /= 2;
+		    console("timestep down to " + timeStep + " at " + t);
+		}
+		if (timeStep < minTimeStep || !adjustTimeStep) {
+		    console("convergence failed after " + subiter + " iterations");
+		    stop("Convergence failed!", null);
+		    break;
+		}
+		// we reduced the timestep.  reset circuit state to the way it was at start of iteration
+		for (int mi = 0; mi != matrices.length; mi++)
+		    setNodeVoltages(matrices[mi], matrices[mi].lastNodeVoltages);
+		stampCircuit();
+		continue;
+	    }
+	    if (subiter > 5 || timeStep < maxTimeStep)
+		console("converged after " + subiter + " iterations, timeStep = " + timeStep);
+	    if (subiter < 3)
+		goodIterations++;
+	    else
+		goodIterations = 0;
+	    t += timeStep;
+	    timeStepAccum += timeStep;
+	    if (timeStepAccum >= maxTimeStep) {
+		timeStepAccum -= maxTimeStep;
+		timeStepCount++;
+	    }
+	    for (i = 0; i != elmArr.length; i++)
+		elmArr[i].stepFinished();
+	    if (!delayWireProcessing)
+		calcWireCurrents();
+	    app.onTimeStep();
+	    if (TestManager.theManager != null && TestManager.theManager.checkTime())
+		break;
+	    // save last node voltages so we can restart the next iteration if necessary
+	    for (int mi = 0; mi != matrices.length; mi++) {
+		CircuitMatrix m = matrices[mi];
+		for (i = 0; i != m.nodeCount; i++)
+		    m.lastNodeVoltages[i] = m.nodeVoltages[i];
+	    }
+//	    console("set lastrightside at " + t + " " + lastNodeVoltages);
+		
+	    tm = System.currentTimeMillis();
+	    lit = tm;
+	    // Check whether enough time has elapsed to perform an *additional* iteration after
+	    // those we have already completed.  But limit total computation time to 50ms (20fps) by default
+	    if ((timeStepCount-timeStepCountAtFrameStart)*1000 >= steprate*(tm-lastIterTime) || (tm-app.ui.lastFrameTime > frameTimeLimit))
+		break;
+	    if (!app.simRunning)
+		break;
+	} // for (iter = 1; ; iter++)
