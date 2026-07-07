@@ -187,11 +187,11 @@ body {
 /* ---- stage -------------------------------------------------------------- */
 #stage { flex: 1; position: relative; min-width: 0; background: var(--bg); }
 
-/* ---- canvas tools (bottom-right corner of the stage) -------------------- */
+/* ---- canvas tools (top-right corner of the stage) ----------------------- */
 #canvas-tools {
   position: absolute;
   right: 14px;
-  bottom: 14px;
+  top: 14px;
   z-index: 12;
   display: flex;
   gap: 6px;
