@@ -1039,7 +1039,27 @@ function railHoleNear(rail, col) {
 const NET_COLORS = ['#3fa54a', '#2f6fed', '#e07b39', '#8e44ad', '#16a085', '#e8b53a'];
 const UNSUP_NAMES = {
   c: 'capacitor', l: 'inductor', d: 'diode', t: 'transistor', f: 'MOSFET',
-  a: 'op-amp', I: 'logic gate', L: 'logic input', M: 'logic output', T: 'transformer',
+  a: 'op-amp', L: 'logic input', M: 'logic output', T: 'transformer',
+};
+
+// CircuitJS gate type codes (text format)
+const GATE_CODES = {
+  '150': 'inverter',  // NOT gate
+  '151': 'and',        // AND gate
+  '152': 'or',         // OR gate
+  '153': 'nand',       // NAND gate
+  '154': 'nor',        // NOR gate
+  '155': 'xor',        // XOR gate
+};
+
+// Map gate types to IC definitions
+const GATE_TO_IC = {
+  inverter: { id: 'hc14', gatesPerChip: 6, inputs: 1 },
+  and: { id: 'hc08', gatesPerChip: 4, inputs: 2 },
+  or: { id: 'hc32', gatesPerChip: 4, inputs: 2 },
+  nand: { id: 'hc00', gatesPerChip: 4, inputs: 2 },
+  nor: { id: 'hc02', gatesPerChip: 4, inputs: 2 },
+  xor: { id: 'hc86', gatesPerChip: 4, inputs: 2 },
 };
 
 // Translate a CircuitJS circuit into a clean breadboard. Supported parts:
@@ -1060,6 +1080,7 @@ function importSchematic(text) {
 
   // Accepts either CircuitJS's newer XML export or the legacy text netlist.
   const elems = [];
+  const gates = [];
   const unsupported = new Set();
   const pushEl = (type, x1, y1, x2, y2, ohms) => {
     if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) return;
@@ -1068,27 +1089,69 @@ function importSchematic(text) {
     if (type === 'w' || type === 'g') uni(a, b);
     elems.push({ type, a, b, ohms });
   };
+  const pushGate = (gateType, x1, y1, x2, y2) => {
+    if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) return;
+    // For gates: in1 at (x1,y1), in2 at (x2,y2) for 2-input gates
+    // Output is computed based on gate position
+    const in1 = K(x1, y1), in2 = K(x2, y2);
+    add(in1); add(in2);
+    // Approximate output position (CircuitJS puts it on the right side of the gate)
+    const outX = Math.max(x1, x2) + 16, outY = (y1 + y2) / 2;
+    const out = K(outX, outY);
+    add(out);
+    gates.push({ gateType, inputs: [in1, in2], output: out });
+  };
 
   if (text.trim().startsWith('<')) {
     // XML: <cir> with <r/>, <LED/>, <s/>, <w/>, <g/>, <v/> children (x="x1 y1 x2 y2")
     const TAG = { r: 'r', LED: 'led', s: 's', w: 'w', g: 'g', v: 'v' };
+    const GATE_TAG = {
+      InvertingGate: 'inverter',
+      Inverter: 'inverter',
+      AndGate: 'and',
+      And: 'and',
+      OrGate: 'or',
+      Or: 'or',
+      NandGate: 'nand',
+      Nand: 'nand',
+      NorGate: 'nor',
+      Nor: 'nor',
+      XorGate: 'xor',
+      Xor: 'xor'
+    };
     const doc = new DOMParser().parseFromString(text, 'text/xml');
     for (const el of doc.querySelectorAll('*')) {
       const tag = el.tagName;
       if (tag === 'cir' || tag === 'parsererror') continue;
       const c = (el.getAttribute('x') || '').trim().split(/\s+/).map(Number);
+
+      // Check if it's a logic gate
+      if (tag in GATE_TAG) {
+        if (c.length >= 4) pushGate(GATE_TAG[tag], c[0], c[1], c[2], c[3]);
+        continue;
+      }
+
       const type = TAG[tag];
       if (!type) { if (c.length >= 4) unsupported.add(UNSUP_NAMES[tag] || tag); continue; }
       pushEl(type, c[0], c[1], c[2], c[3], parseFloat(el.getAttribute('r')));
     }
   } else {
     const SUP = new Set(['w', 'r', 'g', 'R', 'v', '162', 's']);
+    const GATE_SET = new Set(Object.keys(GATE_CODES));
     for (const raw of text.split(/\r?\n/)) {
       const ln = raw.trim();
       if (!ln) continue;
       const tk = ln.split(/\s+/);
       const t0 = tk[0];
       if (t0 === '$' || t0 === 'o' || t0 === 'h' || t0 === '%' || t0 === 'B' || t0 === '38') continue;
+
+      // Check if it's a logic gate
+      if (GATE_SET.has(t0)) {
+        const gateType = GATE_CODES[t0];
+        pushGate(gateType, +tk[1], +tk[2], +tk[3], +tk[4]);
+        continue;
+      }
+
       if (!SUP.has(t0)) { unsupported.add(UNSUP_NAMES[t0] || t0); continue; }
       const type = t0 === '162' ? 'led' : t0;
       pushEl(type, +tk[1], +tk[2], +tk[3], +tk[4], type === 'r' ? parseFloat(tk[6]) : NaN);
@@ -1097,10 +1160,42 @@ function importSchematic(text) {
 
   // refuse rather than build a broken board from a partial circuit
   if (unsupported.size) {
-    return `can't build \u2014 unsupported part(s): ${[...unsupported].join(', ')}. supported: resistor, LED, switch, power, ground.`;
+    return `can't build \u2014 unsupported part(s): ${[...unsupported].join(', ')}. supported: resistor, LED, switch, logic gates, power, ground.`;
   }
-  if (!elems.some((e) => e.type === 'r' || e.type === 'led' || e.type === 's')) {
-    return 'nothing to build \u2014 add a resistor, LED, or switch';
+  const hasPassive = elems.some((e) => e.type === 'r' || e.type === 'led' || e.type === 's');
+  const hasGates = gates.length > 0;
+  if (!hasPassive && !hasGates) {
+    return 'nothing to build \u2014 add a resistor, LED, switch, or logic gate';
+  }
+
+  // Allocate gates to physical IC chips (pack multiple gates per chip)
+  const chipInstances = [];  // array of {type, icDef, gates: [gates]}
+  const gateToChip = new Map();  // gate -> {chip, slot}
+
+  for (const gate of gates) {
+    const icInfo = GATE_TO_IC[gate.gateType];
+    if (!icInfo) continue;  // skip unknown gate types
+
+    // Find existing chip of same type with free slot
+    let chip = chipInstances.find(c =>
+      c.type === gate.gateType &&
+      c.gates.length < icInfo.gatesPerChip
+    );
+
+    // If no chip available, create new one
+    if (!chip) {
+      chip = {
+        type: gate.gateType,
+        icDef: DEF_BY_ID.get(icInfo.id),
+        gates: [],
+      };
+      chipInstances.push(chip);
+    }
+
+    // Assign gate to this chip
+    const slot = chip.gates.length;
+    chip.gates.push(gate);
+    gateToChip.set(gate, { chip, slot });
   }
 
   document.getElementById('btn-clear').click();   // OK to build: clean the board
@@ -1164,11 +1259,118 @@ function importSchematic(text) {
     } else if (e.type === 's') {
       const c0 = col;
       addPart(DEF_BY_ID.get('button'), { holes: [`${c0}e`, `${c0 + 2}e`, `${c0}f`, `${c0 + 2}f`], rot: 0 });
-      registerNet(find(e.a), c0, true);
-      registerNet(find(e.b), c0, false);
+      const netA = find(e.a), netB = find(e.b);
+
+      // Standard convention: one side of switch should be grounded if either net is ground
+      if (isGroundR(netA)) {
+        // Net A is ground - connect left terminals to ground
+        registerNet(netA, c0, true);      // top-left
+        registerNet(netA, c0, false);     // bottom-left
+        registerNet(netB, c0 + 2, true);  // top-right (signal)
+      } else if (isGroundR(netB)) {
+        // Net B is ground - connect right terminals to ground
+        registerNet(netA, c0, true);      // top-left (signal)
+        registerNet(netB, c0 + 2, true);  // top-right to ground
+        registerNet(netB, c0 + 2, false); // bottom-right to ground
+      } else {
+        // Neither is ground - wire as before
+        registerNet(netA, c0, true);
+        registerNet(netB, c0, false);
+      }
+
       col = c0 + 4; prevRightNet = null; prevRightCol = null;
       placed.sw++;
     }
+  }
+
+  // Place IC chips for logic gates (after passive components)
+  const icPlacements = [];  // track {chip, inst, col} for each IC
+  const icPower = [];  // track IC power connections separately (different row conventions)
+
+  for (const chip of chipInstances) {
+    // Place IC straddling the center ravine (standard DIP placement)
+    // 14-pin DIP: pins 1-7 on row e (bottom of top section), pins 8-14 on row f (top of bottom section)
+    // Pins are numbered counter-clockwise: 1-7 down left side, 8-14 up right side
+    const icCol = col;
+    const holes = [
+      // Left side pins 1-7 (row e - bottom of top section)
+      `${icCol}e`, `${icCol + 1}e`, `${icCol + 2}e`, `${icCol + 3}e`,
+      `${icCol + 4}e`, `${icCol + 5}e`, `${icCol + 6}e`,
+      // Right side pins 8-14 (row f - top of bottom section)
+      `${icCol + 6}f`, `${icCol + 5}f`, `${icCol + 4}f`, `${icCol + 3}f`,
+      `${icCol + 2}f`, `${icCol + 1}f`, `${icCol}f`
+    ];
+    const icInst = addPart(chip.icDef, { holes, rot: 0 });
+    icPlacements.push({ chip, inst: icInst, col: icCol });
+
+    // Power connections for ICs (use adjacent rows to avoid conflict with IC pins)
+    // Pin 14 (VCC) is at col, row f → wire goes to col, row g (adjacent)
+    // Pin 7 (GND) is at col+6, row e → wire goes to col+6, row d (adjacent)
+    icPower.push(
+      { type: 'vcc', col: icCol, hole: `${icCol}g` },
+      { type: 'gnd', col: icCol + 6, hole: `${icCol + 6}d` }
+    );
+
+    col += 8;  // 7 columns for IC + 1 gap
+  }
+
+  // Map gate slot to pin indices for each IC type
+  const getGatePins = (gateType, slot) => {
+    if (gateType === 'inverter') {
+      // 74HC14N: 6 inverters
+      const pinMap = [
+        { input: [0], output: 1 },   // gate 0: pins 1→2
+        { input: [2], output: 3 },   // gate 1: pins 3→4
+        { input: [4], output: 5 },   // gate 2: pins 5→6
+        { input: [8], output: 7 },   // gate 3: pins 9→8
+        { input: [10], output: 9 },  // gate 4: pins 11→10
+        { input: [12], output: 11 }, // gate 5: pins 13→12
+      ];
+      return pinMap[slot];
+    } else {
+      // 74HC08/32/00/02/86: 4 two-input gates
+      const pinMap = [
+        { input: [0, 1], output: 2 },  // gate 0: pins 1,2→3
+        { input: [3, 4], output: 5 },  // gate 1: pins 4,5→6
+        { input: [8, 9], output: 7 },  // gate 2: pins 9,10→8
+        { input: [11, 12], output: 10 }, // gate 3: pins 12,13→11
+      ];
+      return pinMap[slot];
+    }
+  };
+
+  // Wire gate signals to IC pins
+  // Wires connect to adjacent rows in same column as IC pins (breadboard columns are connected)
+  // IC pins are in rows 'e' (top section) and 'f' (bottom section)
+  // Wires go to rows 'd' (for top section pins) and 'g' (for bottom section pins)
+  for (const gate of gates) {
+    const mapping = gateToChip.get(gate);
+    if (!mapping) continue;
+    const { chip, slot } = mapping;
+    const placement = icPlacements.find(p => p.chip === chip);
+    if (!placement) continue;
+
+    const pins = getGatePins(chip.type, slot);
+    const icInst = placement.inst;
+
+    // Wire inputs
+    for (let i = 0; i < gate.inputs.length; i++) {
+      const inputNet = find(gate.inputs[i]);
+      const pinIdx = pins.input[i];
+      const inputHole = icInst.holes[pinIdx];
+      const holeCol = parseInt(inputHole.match(/\d+/)[0]);
+      // IC pins in row 'e' use wire row 'd', pins in row 'f' use wire row 'g'
+      const isTop = inputHole.endsWith('e');
+      registerNet(inputNet, holeCol, isTop);
+    }
+
+    // Wire output
+    const outputNet = find(gate.output);
+    const outputPinIdx = pins.output;
+    const outputHole = icInst.holes[outputPinIdx];
+    const holeCol = parseInt(outputHole.match(/\d+/)[0]);
+    const isTop = outputHole.endsWith('e');
+    registerNet(outputNet, holeCol, isTop);
   }
 
   // battery beside the board: + to the TOP rail, - to the BOTTOM rail
@@ -1184,12 +1386,37 @@ function importSchematic(text) {
   for (const t of powerPlus) addWire({ hole: plusTap(t) }, { hole: railHoleNear('T+', t.col) }, '#d43c3c', 'wire');
   for (const t of powerMinus) addWire({ hole: minusTap(t) }, { hole: railHoleNear('B-', t.col) }, '#26262a', 'wire');
 
+  // IC power connections (use explicit holes in adjacent rows to IC pins)
+  for (const pwr of icPower) {
+    if (pwr.type === 'vcc') {
+      addWire({ hole: pwr.hole }, { hole: railHoleNear('T+', pwr.col) }, '#d43c3c', 'wire');
+    } else {
+      addWire({ hole: pwr.hole }, { hole: railHoleNear('B-', pwr.col) }, '#26262a', 'wire');
+    }
+  }
+
   let ci = 0;
   for (const j of jumpers) {
     addWire({ hole: jumpTap(j.a) }, { hole: jumpTap(j.b) }, NET_COLORS[ci++ % NET_COLORS.length], 'wire');
   }
 
-  return `built ${placed.r} resistor(s), ${placed.led} LED(s), ${placed.sw} switch(es)`;
+  // Build success message with part counts
+  const parts = [];
+  if (placed.r) parts.push(`${placed.r} resistor${placed.r > 1 ? 's' : ''}`);
+  if (placed.led) parts.push(`${placed.led} LED${placed.led > 1 ? 's' : ''}`);
+  if (placed.sw) parts.push(`${placed.sw} switch${placed.sw > 1 ? 'es' : ''}`);
+  if (chipInstances.length) {
+    // Group ICs by type for nicer message
+    const icCounts = {};
+    for (const chip of chipInstances) {
+      const name = chip.icDef.id.toUpperCase();
+      icCounts[name] = (icCounts[name] || 0) + 1;
+    }
+    for (const [name, count] of Object.entries(icCounts)) {
+      parts.push(`${count} ${name}`);
+    }
+  }
+  return `built ${parts.join(', ')}`;
 }
 
 // ---------------------------------------------------------------- sim + dynamic render loop

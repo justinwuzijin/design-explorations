@@ -387,7 +387,10 @@ function drawPCB(g) {
 
 const HC14 = ['1A', '1Y', '2A', '2Y', '3A', '3Y', 'GND', '4Y', '4A', '5Y', '5A', '6Y', '6A', 'VCC'];
 const HC08 = ['1A', '1B', '1Y', '2A', '2B', '2Y', 'GND', '3Y', '3A', '3B', '4Y', '4A', '4B', 'VCC'];
-const HC32 = HC08;
+const HC32 = HC08;  // OR gates
+const HC00 = HC08;  // NAND gates
+const HC02 = HC08;  // NOR gates
+const HC86 = HC08;  // XOR gates
 const HC283 = ['S2', 'B2', 'A2', 'S1', 'A1', 'B1', 'C0', 'GND', 'C4', 'S4', 'B4', 'A4', 'S3', 'A3', 'B3', 'VCC'];
 const HC153 = ['1G', 'B', '1C3', '1C2', '1C1', '1C0', '1Y', 'GND', '2Y', '2C0', '2C1', '2C2', '2C3', 'A', '2G', 'VCC'];
 const CD4013 = ['Q1', 'Q1N', 'CLK1', 'RST1', 'D1', 'SET1', 'GND', 'SET2', 'D2', 'RST2', 'CLK2', 'Q2N', 'Q2', 'VCC'];
@@ -460,6 +463,9 @@ export const CATALOG = [
   { ...dipDef('hc14', 'SN74HC14N inverter', 7, 3, 'SN74HC14N', 'hc14', HC14, 'hex inverter'), paletteName: 'logic chip' },
   { ...dipDef('hc08', 'SN74HC08N AND', 7, 3, 'SN74HC08N', 'hc08', HC08, 'quad AND'), hidden: true },
   { ...dipDef('hc32', 'SN74HC32N OR', 7, 3, 'SN74HC32N', 'hc32', HC32, 'quad OR'), hidden: true },
+  { ...dipDef('hc00', 'SN74HC00N NAND', 7, 3, 'SN74HC00N', 'hc00', HC00, 'quad NAND'), hidden: true },
+  { ...dipDef('hc02', 'SN74HC02N NOR', 7, 3, 'SN74HC02N', 'hc02', HC02, 'quad NOR'), hidden: true },
+  { ...dipDef('hc86', 'SN74HC86N XOR', 7, 3, 'SN74HC86N', 'hc86', HC86, 'quad XOR'), hidden: true },
   { ...dipDef('hc283', 'CD74HC283E adder', 8, 3, 'CD74HC283E', 'hc283', HC283, '4-bit adder'), hidden: true },
   { ...dipDef('hc153', 'SN74HC153N mux', 8, 3, 'SN74HC153N', 'hc153', HC153, 'dual 4:1 mux'), hidden: true },
   { ...dipDef('cd4013', 'CD4013BE flip-flop', 7, 3, 'CD4013BE', 'cd4013', CD4013, 'dual D-FF'), hidden: true },
