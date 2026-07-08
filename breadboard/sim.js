@@ -211,6 +211,15 @@ export function runSim(state, dt, t) {
         case 'hc32':
           for (let i = 1; i <= 4; i++) drive(`${i}Y`, hi(`${i}A`) || hi(`${i}B`));
           break;
+        case 'hc00':
+          for (let i = 1; i <= 4; i++) drive(`${i}Y`, !(hi(`${i}A`) && hi(`${i}B`)));
+          break;
+        case 'hc02':
+          for (let i = 1; i <= 4; i++) drive(`${i}Y`, !(hi(`${i}A`) || hi(`${i}B`)));
+          break;
+        case 'hc86':
+          for (let i = 1; i <= 4; i++) drive(`${i}Y`, hi(`${i}A`) !== hi(`${i}B`));
+          break;
         case 'hc283': {
           let a = 0, b = 0;
           for (let i = 0; i < 4; i++) {

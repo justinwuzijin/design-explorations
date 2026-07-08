@@ -185,7 +185,17 @@ body {
 .cell:hover .tip { opacity: 1; }
 
 /* ---- stage -------------------------------------------------------------- */
-#stage { flex: 1; position: relative; min-width: 0; background: var(--bg); }
+#stage {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  background: var(--bg);
+  transition: margin-right 0.3s ease;
+}
+/* squeeze stage left when schematic panel is open */
+#app.schematic-open #stage {
+  margin-right: min(48vw, 640px);
+}
 
 /* ---- canvas tools (top-right corner of the stage) ----------------------- */
 #canvas-tools {

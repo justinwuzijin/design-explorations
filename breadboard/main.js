@@ -1,8 +1,8 @@
 // Breadboard simulator: palette, placement, wiring, inspector, sim loop.
 
 import { P, E, BODY, buildBoard, nearestHole, HOLE_BY_ID, baseNetOf } from './board.js';
-import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=14';
-import { runSim, portNode } from './sim.js';
+import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=15';
+import { runSim, portNode } from './sim.js?v=2';
 
 const svg = document.getElementById('canvas');
 const world = document.getElementById('world');
@@ -993,13 +993,38 @@ function hookCircuitJS() {
     if (!win) return;
     if (win.CircuitJS1) cjSim = win.CircuitJS1;            // already booted
     win.oncircuitjsloaded = () => { cjSim = win.CircuitJS1; };
+
+    // Inject CSS to simplify the CircuitJS UI
+    setTimeout(() => {
+      try {
+        const doc = win.document;
+        if (!doc) return;
+        const style = doc.createElement('style');
+        style.textContent = `
+          /* Hide the menu bar entirely - users will draw with right-click component menu */
+          .gwt-MenuBar-horizontal { display: none !important; }
+          /* Hide scope panels and extra UI to maximize circuit drawing space */
+          .topSpace { display: none !important; }
+        `;
+        doc.head.appendChild(style);
+      } catch (e) { /* cross-origin or not ready */ }
+    }, 1000);
   } catch (_) { /* still loading */ }
 }
 schFrame.addEventListener('load', hookCircuitJS);
 hookCircuitJS();
 
-document.getElementById('btn-schematic').addEventListener('click', () => schEl.classList.toggle('open'));
-document.getElementById('sch-close').addEventListener('click', () => schEl.classList.remove('open'));
+const appEl = document.getElementById('app');
+document.getElementById('btn-schematic').addEventListener('click', () => {
+  schEl.classList.toggle('open');
+  appEl.classList.toggle('schematic-open');
+  fitView();
+});
+document.getElementById('sch-close').addEventListener('click', () => {
+  schEl.classList.remove('open');
+  appEl.classList.remove('schematic-open');
+  fitView();
+});
 document.getElementById('build-bb').addEventListener('click', () => {
   const status = document.getElementById('bridge-status');
   if (!cjSim) hookCircuitJS();
