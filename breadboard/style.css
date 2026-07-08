@@ -469,6 +469,20 @@ body {
 }
 #netlist:focus { outline: none; border-color: #b9c6e8; }
 .sch-row { display: flex; align-items: center; gap: 12px; }
+.import-file-btn {
+  display: inline-block;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.65);
+  font: 500 0.72rem 'Inter', sans-serif;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+.import-file-btn:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: #000;
+}
 #build-bb {
   border: none; cursor: pointer; background: #2f6fed; color: #fff;
   font: 500 0.72rem 'Inter', sans-serif; padding: 8px 14px; border-radius: 8px;

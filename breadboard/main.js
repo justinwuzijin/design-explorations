@@ -993,22 +993,6 @@ function hookCircuitJS() {
     if (!win) return;
     if (win.CircuitJS1) cjSim = win.CircuitJS1;            // already booted
     win.oncircuitjsloaded = () => { cjSim = win.CircuitJS1; };
-
-    // Inject CSS to simplify the CircuitJS UI
-    setTimeout(() => {
-      try {
-        const doc = win.document;
-        if (!doc) return;
-        const style = doc.createElement('style');
-        style.textContent = `
-          /* Hide the menu bar entirely - users will draw with right-click component menu */
-          .gwt-MenuBar-horizontal { display: none !important; }
-          /* Hide scope panels and extra UI to maximize circuit drawing space */
-          .topSpace { display: none !important; }
-        `;
-        doc.head.appendChild(style);
-      } catch (e) { /* cross-origin or not ready */ }
-    }, 1000);
   } catch (_) { /* still loading */ }
 }
 schFrame.addEventListener('load', hookCircuitJS);
@@ -1041,6 +1025,40 @@ document.getElementById('build-bb').addEventListener('click', () => {
   }
 });
 
+// Import circuit file into CircuitJS
+document.getElementById('import-circuit').addEventListener('change', async (e) => {
+  const status = document.getElementById('bridge-status');
+  const file = e.target.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    if (!cjSim) hookCircuitJS();
+
+    // Wait a bit for CircuitJS to be ready
+    let attempts = 0;
+    const tryLoad = () => {
+      if (cjSim && typeof cjSim.setCircuit === 'function') {
+        cjSim.setCircuit(text);
+        status.textContent = `loaded ${file.name}`;
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      } else if (attempts < 20) {
+        attempts++;
+        setTimeout(tryLoad, 200);
+      } else {
+        status.textContent = 'simulator not ready \u2014 try again';
+      }
+    };
+    tryLoad();
+  } catch (err) {
+    status.textContent = 'could not read file';
+    console.error(err);
+  }
+
+  // Reset file input so the same file can be loaded again
+  e.target.value = '';
+});
+
 const RES_DEFS = CATALOG.filter((d) => d.sim && d.sim.type === 'resistor');
 function nearestResistorDef(ohms) {
   let best = RES_DEFS[0], bd = Infinity;
@@ -1065,6 +1083,7 @@ const NET_COLORS = ['#3fa54a', '#2f6fed', '#e07b39', '#8e44ad', '#16a085', '#e8b
 const UNSUP_NAMES = {
   c: 'capacitor', l: 'inductor', d: 'diode', t: 'transistor', f: 'MOSFET',
   a: 'op-amp', L: 'logic input', M: 'logic output', T: 'transformer',
+  x: 'scope/probe', as: 'analog switch', I: 'current source',
 };
 
 // CircuitJS gate type codes (text format)
@@ -1085,6 +1104,7 @@ const GATE_TO_IC = {
   nand: { id: 'hc00', gatesPerChip: 4, inputs: 2 },
   nor: { id: 'hc02', gatesPerChip: 4, inputs: 2 },
   xor: { id: 'hc86', gatesPerChip: 4, inputs: 2 },
+  dff: { id: 'cd4013', gatesPerChip: 2, inputs: 2 },  // D flip-flop (CLK, D)
 };
 
 // Translate a CircuitJS circuit into a clean breadboard. Supported parts:
@@ -1129,7 +1149,12 @@ function importSchematic(text) {
 
   if (text.trim().startsWith('<')) {
     // XML: <cir> with <r/>, <LED/>, <s/>, <w/>, <g/>, <v/> children (x="x1 y1 x2 y2")
-    const TAG = { r: 'r', LED: 'led', s: 's', w: 'w', g: 'g', v: 'v' };
+    const TAG = {
+      r: 'r', R: 'r',  // resistor (both cases)
+      LED: 'led',
+      s: 's', S: 's',  // switch (both cases)
+      w: 'w', g: 'g', v: 'v'
+    };
     const GATE_TAG = {
       InvertingGate: 'inverter',
       Inverter: 'inverter',
@@ -1144,10 +1169,19 @@ function importSchematic(text) {
       XorGate: 'xor',
       Xor: 'xor'
     };
+    const FLIPFLOP_TAG = {
+      DFlipFlop: 'dff',
+      DFF: 'dff'
+    };
+    const SKIP_XML = new Set(['x', 'ScopeElm', 'as', 'AnalogSwitch', 'AnalogSwitchElm', 'o', 'h', '%', 'B', '38']);
     const doc = new DOMParser().parseFromString(text, 'text/xml');
     for (const el of doc.querySelectorAll('*')) {
       const tag = el.tagName;
       if (tag === 'cir' || tag === 'parsererror') continue;
+
+      // Skip visualization/UI elements
+      if (SKIP_XML.has(tag)) continue;
+
       const c = (el.getAttribute('x') || '').trim().split(/\s+/).map(Number);
 
       // Check if it's a logic gate
@@ -1156,19 +1190,27 @@ function importSchematic(text) {
         continue;
       }
 
+      // Check if it's a flip-flop (D flip-flop)
+      if (tag in FLIPFLOP_TAG) {
+        if (c.length >= 4) pushGate('dff', c[0], c[1], c[2], c[3]);  // treat as gate for now
+        continue;
+      }
+
       const type = TAG[tag];
       if (!type) { if (c.length >= 4) unsupported.add(UNSUP_NAMES[tag] || tag); continue; }
       pushEl(type, c[0], c[1], c[2], c[3], parseFloat(el.getAttribute('r')));
     }
   } else {
-    const SUP = new Set(['w', 'r', 'g', 'R', 'v', '162', 's']);
+    const SUP = new Set(['w', 'r', 'g', 'R', 'v', '162', 's', 'S']);
     const GATE_SET = new Set(Object.keys(GATE_CODES));
+    const DFF_CODES = new Set(['159']);  // D flip-flop code in text format
+    const SKIP = new Set(['$', 'o', 'h', '%', 'B', '38', 'x', 'as']);  // visualization/UI elements to skip
     for (const raw of text.split(/\r?\n/)) {
       const ln = raw.trim();
       if (!ln) continue;
       const tk = ln.split(/\s+/);
       const t0 = tk[0];
-      if (t0 === '$' || t0 === 'o' || t0 === 'h' || t0 === '%' || t0 === 'B' || t0 === '38') continue;
+      if (SKIP.has(t0)) continue;
 
       // Check if it's a logic gate
       if (GATE_SET.has(t0)) {
@@ -1177,15 +1219,21 @@ function importSchematic(text) {
         continue;
       }
 
+      // Check if it's a D flip-flop
+      if (DFF_CODES.has(t0)) {
+        pushGate('dff', +tk[1], +tk[2], +tk[3], +tk[4]);
+        continue;
+      }
+
       if (!SUP.has(t0)) { unsupported.add(UNSUP_NAMES[t0] || t0); continue; }
-      const type = t0 === '162' ? 'led' : t0;
+      const type = t0 === '162' ? 'led' : (t0 === 'R' ? 'r' : (t0 === 'S' ? 's' : t0));
       pushEl(type, +tk[1], +tk[2], +tk[3], +tk[4], type === 'r' ? parseFloat(tk[6]) : NaN);
     }
   }
 
   // refuse rather than build a broken board from a partial circuit
   if (unsupported.size) {
-    return `can't build \u2014 unsupported part(s): ${[...unsupported].join(', ')}. supported: resistor, LED, switch, logic gates, power, ground.`;
+    return `can't build \u2014 unsupported part(s): ${[...unsupported].join(', ')}. supported: resistor, LED, switch, logic gates, D flip-flops, power, ground.`;
   }
   const hasPassive = elems.some((e) => e.type === 'r' || e.type === 'led' || e.type === 's');
   const hasGates = gates.length > 0;
@@ -1350,6 +1398,13 @@ function importSchematic(text) {
         { input: [8], output: 7 },   // gate 3: pins 9→8
         { input: [10], output: 9 },  // gate 4: pins 11→10
         { input: [12], output: 11 }, // gate 5: pins 13→12
+      ];
+      return pinMap[slot];
+    } else if (gateType === 'dff') {
+      // CD4013: 2 D flip-flops (CLK, D inputs → Q output)
+      const pinMap = [
+        { input: [2, 4], output: 0 },   // FF1: CLK=pin3, D=pin5 → Q=pin1
+        { input: [10, 8], output: 12 }, // FF2: CLK=pin11, D=pin9 → Q=pin13
       ];
       return pinMap[slot];
     } else {
