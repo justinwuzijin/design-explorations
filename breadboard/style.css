@@ -192,9 +192,9 @@ body {
   background: var(--bg);
   transition: margin-right 0.3s ease;
 }
-/* squeeze stage left when schematic panel is open */
+/* squeeze stage left when schematic panel is open - canvas at 50% */
 #app.schematic-open #stage {
-  margin-right: min(48vw, 640px);
+  margin-right: 50%;
 }
 
 /* ---- canvas tools (top-right corner of the stage) ----------------------- */
@@ -432,7 +432,7 @@ body {
   top: 46px;
   right: 0;
   bottom: 0;
-  width: min(48vw, 640px);
+  width: 50%;
   background: #fff;
   border-left: 1px solid var(--rule);
   box-shadow: -10px 0 34px rgba(0, 0, 0, 0.14);
@@ -489,3 +489,97 @@ body {
 }
 #build-bb:hover { background: #265fd0; }
 #bridge-status { font-size: 0.64rem; color: var(--muted); }
+
+/* ---- Serial Monitor (slides up from bottom) -------------------------------- */
+#serial-monitor {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 50vh;
+  background: #1e1e1e;
+  border-top: 1px solid var(--rule);
+  box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.2);
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+#serial-monitor.open { transform: none; }
+.serial-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #2d2d2d;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #e0e0e0;
+}
+#serial-close {
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.7);
+  transition: background 0.15s, color 0.15s;
+}
+#serial-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.serial-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font: 0.7rem/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: #d4d4d4;
+  background: #1e1e1e;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.serial-output::-webkit-scrollbar {
+  width: 8px;
+}
+.serial-output::-webkit-scrollbar-track {
+  background: #2d2d2d;
+}
+.serial-output::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+.serial-output::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+.serial-controls {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 14px;
+  display: flex;
+  gap: 8px;
+  background: #2d2d2d;
+}
+.serial-controls button {
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font: 500 0.68rem 'Inter', sans-serif;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.serial-controls button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Adjust stage bottom margin when serial monitor is open */
+#app.serial-open #stage {
+  margin-bottom: 50vh;
+}

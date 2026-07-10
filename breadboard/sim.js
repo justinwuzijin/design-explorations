@@ -3,6 +3,7 @@
 // Not a full SPICE — just enough physics for real breadboard-lab behavior.
 
 import { baseNetOf } from './board.js';
+import { ArduinoRuntime } from './arduino.js';
 
 // node key for a placed pin: base net of the hole under it
 export function pinNode(inst, i) {
@@ -82,6 +83,7 @@ export function runSim(state, dt, t) {
   const leds = [];
   const dmms = [];
   const icQueue = [];
+  const arduinos = [];
 
   for (const inst of state.parts) {
     const sim = inst.def.sim || { type: 'deco' };
@@ -136,6 +138,23 @@ export function runSim(state, dt, t) {
       case 'ic':
         icQueue.push(inst);
         break;
+      case 'arduino': {
+        // Initialize Arduino runtime if not exists
+        if (!rt.arduino) {
+          rt.arduino = new ArduinoRuntime();
+          if (inst.props.code) {
+            rt.arduino.loadSketch(inst.props.code);
+          }
+        }
+        // Power pins provide fixed voltages
+        for (const port of inst.def.ports) {
+          if (port.volts !== undefined) {
+            fixed.set(uf.find(portNode(inst, port.name)), port.volts);
+          }
+        }
+        arduinos.push(inst);
+        break;
+      }
     }
   }
 
@@ -259,8 +278,61 @@ export function runSim(state, dt, t) {
     }
   };
 
+  // Arduino execution and I/O
+  const evalArduinos = () => {
+    for (const inst of arduinos) {
+      const rt = inst.rt;
+      const arduino = rt.arduino;
+      if (!arduino) continue;
+
+      // Arduino is always powered in simulation
+      rt.powered = true;
+
+      // Read input voltages from circuit for all digital and analog pins
+      for (let i = 0; i <= 13; i++) {
+        const pinName = `D${i}`;
+        const node = portNode(inst, pinName);
+        arduino.setExternalVoltage(pinName, vAt(node));
+      }
+      for (let i = 0; i < 6; i++) {
+        const pinName = `A${i}`;
+        const node = portNode(inst, pinName);
+        arduino.setExternalVoltage(pinName, vAt(node));
+      }
+
+      // Execute Arduino code
+      arduino.tick(dt);
+
+      // Drive output pins
+      for (let i = 0; i <= 13; i++) {
+        const pinName = `D${i}`;
+        const voltage = arduino.getPinVoltage(pinName);
+        if (voltage > 0) {
+          const node = portNode(inst, pinName);
+          if (node) {
+            // Arduino outputs have ~40 ohm source resistance
+            addDrv(node, voltage, 40);
+          }
+        }
+      }
+
+      // Analog pins can also be used as digital outputs
+      for (let i = 0; i < 6; i++) {
+        const pinName = `A${i}`;
+        const voltage = arduino.getPinVoltage(pinName);
+        if (voltage > 0) {
+          const node = portNode(inst, pinName);
+          if (node) {
+            addDrv(node, voltage, 40);
+          }
+        }
+      }
+    }
+  };
+
   solve();
-  for (let pass = 0; pass < 3; pass++) { evalICs(); solve(); }
+  evalArduinos();
+  for (let pass = 0; pass < 3; pass++) { evalICs(); evalArduinos(); solve(); }
 
   // latch flip-flop clock levels for next frame's edge detection
   for (const inst of icQueue) {

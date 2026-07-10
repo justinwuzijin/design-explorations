@@ -229,30 +229,76 @@ function draw5V(g) {
 // ---- free (off-board) parts ---------------------------------------------------
 
 function drawArduino(g, inst) {
-  const W = 214, H = 152;
+  const W = 214, H = 170;
+  // PCB board
   E('rect', { x: 0, y: 0, width: W, height: H, rx: 8, fill: '#0f7a8a', filter: 'url(#softShadow)' }, g);
   E('rect', { x: 0, y: 0, width: W, height: 5, rx: 3, fill: 'rgba(255,255,255,0.12)' }, g);
-  // usb + barrel
-  E('rect', { x: -10, y: 16, width: 34, height: 30, rx: 3, fill: 'url(#metalG)' }, g);
-  E('rect', { x: -10, y: 96, width: 30, height: 34, rx: 4, fill: '#17181c' }, g);
-  E('circle', { cx: 20, cy: 113, r: 7, fill: '#0a0a0c' }, g);
-  // headers
-  E('rect', { x: 52, y: 6, width: 150, height: 12, rx: 2, fill: '#17181c' }, g);
-  E('rect', { x: 62, y: H - 18, width: 140, height: 12, rx: 2, fill: '#17181c' }, g);
-  // atmega
-  E('rect', { x: 76, y: 92, width: 96, height: 26, rx: 2.5, fill: 'url(#dipG)' }, g);
-  txt(g, 124, 108, 'ATMEGA328P', 5.4, '#cfcdc8');
-  // silk
-  txt(g, 124, 56, 'ARDUINO', 11, '#eaf5f6', 'middle', 600);
-  txt(g, 124, 68, 'UNO', 8, 'rgba(234,245,246,0.8)', 'middle', 600);
-  E('circle', { cx: 190, cy: 40, r: 3, fill: '#3adb6a' }, g);
-  txt(g, 190, 51, 'ON', 4.2, 'rgba(255,255,255,0.7)');
-  // port dots (drawn by main.js port renderer) — label the power pins
-  txt(g, 84, H - 22, '5V', 4.6, 'rgba(255,255,255,0.85)');
-  txt(g, 100, H - 22, '3V3', 4.6, 'rgba(255,255,255,0.85)');
-  txt(g, 118, H - 22, 'GND', 4.6, 'rgba(255,255,255,0.85)');
-  txt(g, 136, H - 22, 'GND', 4.6, 'rgba(255,255,255,0.85)');
-  txt(g, 154, H - 22, 'VIN', 4.6, 'rgba(255,255,255,0.6)');
+
+  // USB connector (left side, top)
+  E('rect', { x: -12, y: 18, width: 16, height: 12, fill: 'url(#metalG)' }, g);
+  E('rect', { x: -8, y: 20, width: 10, height: 8, fill: '#0a0a0c' }, g);
+
+  // Barrel jack (left side, bottom)
+  E('rect', { x: -10, y: 102, width: 30, height: 34, rx: 4, fill: '#17181c' }, g);
+  E('circle', { cx: 5, cy: 119, r: 7, fill: '#0a0a0c' }, g);
+
+  // Digital pins header (top, 2 sections: 8 pins + 6 pins)
+  // Section 1: pins 0-7
+  E('rect', { x: 123, y: 2, width: 8 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
+  // Section 2: pins 8-13
+  E('rect', { x: 41, y: 2, width: 6 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
+
+  // Power header (bottom left, 8 pins)
+  E('rect', { x: 41, y: H - 12, width: 8 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
+
+  // Analog pins header (bottom right, 6 pins)
+  E('rect', { x: 143, y: H - 12, width: 6 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
+
+  // ATMEGA328P chip
+  E('rect', { x: 76, y: 98, width: 96, height: 26, rx: 2.5, fill: 'url(#dipG)' }, g);
+  txt(g, 124, 114, 'ATMEGA328P', 5.4, '#cfcdc8');
+
+  // Branding
+  txt(g, 107, 62, 'ARDUINO', 11, '#eaf5f6', 'middle', 600);
+  txt(g, 107, 74, 'UNO', 8, 'rgba(234,245,246,0.8)', 'middle', 600);
+
+  // Status LEDs (right side)
+  const statusLED = E('circle', { cx: 190, cy: 46, r: 3, fill: '#3adb6a' }, g);
+  txt(g, 184, 49, 'ON', 3.8, 'rgba(255,255,255,0.7)', 'end');
+  const txLED = E('circle', { cx: 190, cy: 56, r: 2.2, fill: '#ff8f2e', opacity: 0 }, g);
+  txt(g, 184, 58, 'TX', 3.2, 'rgba(255,255,255,0.6)', 'end');
+  const rxLED = E('circle', { cx: 190, cy: 64, r: 2.2, fill: '#ff8f2e', opacity: 0 }, g);
+  txt(g, 184, 66, 'RX', 3.2, 'rgba(255,255,255,0.6)', 'end');
+
+  // Pin labels - Digital pins (top header, right to left: 0-7, then 8-13)
+  const pinSpacing = 10.16;  // Standard 0.1" header spacing
+
+  // Pins 0-7 (rightmost section)
+  for (let i = 0; i <= 7; i++) {
+    const x = 123 + (7 - i) * pinSpacing;
+    txt(g, x + 5, 16, i.toString(), 3.4, 'rgba(255,255,255,0.85)');
+  }
+
+  // Pins 8-13 (left section)
+  for (let i = 8; i <= 13; i++) {
+    const x = 41 + (13 - i) * pinSpacing;
+    txt(g, x + 5, 16, i.toString(), 3.4, 'rgba(255,255,255,0.85)');
+  }
+
+  // Pin labels - Power pins (bottom left header, left to right)
+  const powerLabels = ['5V', '5V', 'GND', 'GND', 'VIN'];
+  for (let i = 0; i < powerLabels.length; i++) {
+    const x = 41 + (4 - i) * pinSpacing;  // Reverse order for visual alignment
+    txt(g, x + 5, H - 16, powerLabels[i], 3.4, 'rgba(255,255,255,0.85)');
+  }
+
+  // Pin labels - Analog pins (bottom right, right to left: A0-A5)
+  for (let i = 0; i < 6; i++) {
+    const x = 143 + (5 - i) * pinSpacing;
+    txt(g, x + 5, H - 16, `A${i}`, 3.4, 'rgba(255,255,255,0.85)');
+  }
+
+  inst._dyn = { statusLED, txLED, rxLED };
 }
 
 // off-board 9V battery photo with two flying terminal leads ending in ports
@@ -479,6 +525,50 @@ export const CATALOG = [
     draw: drawBattery,
     size: { w: 46, h: 84 },
     thumb: { x: -6, y: -26, w: 58, h: 116 },
+  },
+
+  // --- Arduino Uno (free part with digital and analog I/O)
+  {
+    id: 'arduino', cat: 'power', name: 'Arduino Uno', kind: 'free',
+    ports: (() => {
+      const H = 170;
+      const pinSpacing = 10.16;  // 0.1" header spacing in SVG units
+      const ports = [];
+
+      // Digital pins 0-7 (top header, right section, right to left)
+      for (let i = 0; i <= 7; i++) {
+        const x = 123 + (7 - i) * pinSpacing + 5;
+        ports.push({ x, y: 7, name: `D${i}` });
+      }
+
+      // Digital pins 8-13 (top header, left section, right to left)
+      for (let i = 8; i <= 13; i++) {
+        const x = 41 + (13 - i) * pinSpacing + 5;
+        ports.push({ x, y: 7, name: `D${i}` });
+      }
+
+      // Power pins (bottom left header) - Actual Arduino order: IOREF, RESET, 3.3V, 5V, GND, GND, Vin, (NC)
+      // We'll expose: 5V, 3.3V, GND, GND, VIN
+      ports.push({ x: 41 + 3 * pinSpacing + 5, y: H - 5, name: '5V', volts: 5 });
+      ports.push({ x: 41 + 2 * pinSpacing + 5, y: H - 5, name: '3V3', volts: 3.3 });
+      ports.push({ x: 41 + 4 * pinSpacing + 5, y: H - 5, name: 'GND', volts: 0 });
+      ports.push({ x: 41 + 5 * pinSpacing + 5, y: H - 5, name: 'GND2', volts: 0 });
+      ports.push({ x: 41 + 6 * pinSpacing + 5, y: H - 5, name: 'VIN' });
+
+      // Analog pins A0-A5 (bottom right header, right to left)
+      for (let i = 0; i < 6; i++) {
+        const x = 143 + (5 - i) * pinSpacing + 5;
+        ports.push({ x, y: H - 5, name: `A${i}` });
+      }
+
+      return ports;
+    })(),
+    sim: { type: 'arduino' },
+    props: { code: '' },
+    draw: drawArduino,
+    thumbImg: 'img/arduino.jpg',
+    size: { w: 214, h: 170 },
+    thumb: { x: -10, y: -10, w: 234, h: 190 },
   },
 ];
 

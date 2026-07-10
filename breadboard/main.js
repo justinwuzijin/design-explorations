@@ -307,6 +307,16 @@ function addWire(a, b, color, kind) {
 }
 
 // ---------------------------------------------------------------- selection + inspector
+function updateSerialOutput() {
+  const serialOutput = document.getElementById('serial-output');
+  if (!sel || sel.kind !== 'part' || sel.inst.def.sim?.type !== 'arduino') return;
+  const arduino = sel.inst.rt?.arduino;
+  if (!arduino || !arduino.serialBuffer) return;
+
+  serialOutput.textContent = arduino.serialBuffer.join('');
+  serialOutput.scrollTop = serialOutput.scrollHeight;
+}
+
 function select(s) {
   sel = s;
   refreshSelBox();
@@ -432,6 +442,85 @@ function buildInspector() {
       note.className = 'ins-note';
       note.textContent = 'wire COM and V\u03A9 ports to any two points to measure.';
       inspector.appendChild(note);
+    }
+    if (type === 'arduino') {
+      const row = insRow(inspector, 'sketch');
+      const textarea = document.createElement('textarea');
+      textarea.style.cssText = 'width:100%;height:200px;font-family:monospace;font-size:11px;';
+      textarea.value = inst.props.code || `// Arduino Uno Sketch
+void setup() {
+  // Initialize pins
+  pinMode(13, OUTPUT);  // Built-in LED
+}
+
+void loop() {
+  // Main program loop
+  digitalWrite(13, HIGH);
+  digitalWrite(13, LOW);
+}`;
+      textarea.oninput = () => { inst.props.code = textarea.value; saveSoon(); };
+      row.appendChild(textarea);
+
+      const uploadRow = document.createElement('div');
+      uploadRow.className = 'ins-row';
+      const uploadBtn = document.createElement('button');
+      uploadBtn.textContent = 'upload sketch';
+      uploadBtn.style.cssText = 'width:100%;padding:8px;border:none;border-radius:6px;background:#2f6fed;color:#fff;cursor:pointer;font-weight:500;';
+      uploadBtn.onclick = () => {
+        if (inst.rt && inst.rt.arduino) {
+          const result = inst.rt.arduino.loadSketch(inst.props.code);
+          if (result.success) {
+            uploadBtn.textContent = 'uploaded \u2713';
+            uploadBtn.style.background = '#3adb6a';
+            setTimeout(() => {
+              uploadBtn.textContent = 'upload sketch';
+              uploadBtn.style.background = '#2f6fed';
+            }, 2000);
+          } else {
+            alert('Error loading sketch:\n' + result.error);
+          }
+        }
+      };
+      uploadRow.appendChild(uploadBtn);
+      inspector.appendChild(uploadRow);
+
+      const statusDiv = document.createElement('div');
+      statusDiv.className = 'ins-note';
+      statusDiv.style.cssText = 'margin-top:8px;';
+      statusDiv.textContent = '\u2713 Arduino always powered';
+      inspector.appendChild(statusDiv);
+
+      const note = document.createElement('div');
+      note.className = 'ins-note';
+      note.style.cssText = 'margin-top:8px;font-size:10px;color:#666;';
+      note.innerHTML = `<strong>Note:</strong> delay() is not supported. Use millis() for timing.<br>
+Supported: pinMode, digitalWrite, digitalRead, analogRead, analogWrite, Serial.print/println`;
+      inspector.appendChild(note);
+
+      // Serial Monitor button
+      const serialRow = document.createElement('div');
+      serialRow.className = 'ins-row';
+      serialRow.style.cssText = 'margin-top:10px;';
+      const serialBtn = document.createElement('button');
+      serialBtn.textContent = 'Open Serial Monitor';
+      serialBtn.style.cssText = 'width:100%;padding:8px;border:none;border-radius:6px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.65);cursor:pointer;font-weight:500;';
+      serialBtn.onclick = () => {
+        const serialMonitor = document.getElementById('serial-monitor');
+        const isOpen = serialMonitor.classList.contains('open');
+        if (isOpen) {
+          serialMonitor.classList.remove('open');
+          appEl.classList.remove('serial-open');
+          serialBtn.textContent = 'Open Serial Monitor';
+        } else {
+          serialMonitor.classList.add('open');
+          appEl.classList.add('serial-open');
+          serialBtn.textContent = 'Close Serial Monitor';
+          updateSerialOutput();
+        }
+        setTimeout(() => fitView(), 350);
+      };
+      serialRow.appendChild(serialBtn);
+      inspector.appendChild(serialRow);
     }
 
     const actions = document.createElement('div');
@@ -966,6 +1055,21 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 });
 document.getElementById('zoom-in').addEventListener('click', () => zoomStep(1));
 document.getElementById('zoom-out').addEventListener('click', () => zoomStep(-1));
+
+// Serial monitor controls
+document.getElementById('serial-close').addEventListener('click', () => {
+  document.getElementById('serial-monitor').classList.remove('open');
+  appEl.classList.remove('serial-open');
+  setTimeout(() => fitView(), 350);
+});
+
+document.getElementById('serial-clear').addEventListener('click', () => {
+  if (sel && sel.kind === 'part' && sel.inst.rt?.arduino) {
+    sel.inst.rt.arduino.serialBuffer = [];
+    updateSerialOutput();
+  }
+});
+
 // Re-fit every frame while the parts panel slides so the board recenters
 // gradually in sync with the panel (instead of one jump at the end).
 let paletteAnim = 0;
@@ -1000,14 +1104,17 @@ hookCircuitJS();
 
 const appEl = document.getElementById('app');
 document.getElementById('btn-schematic').addEventListener('click', () => {
+  const wasOpen = schEl.classList.contains('open');
   schEl.classList.toggle('open');
   appEl.classList.toggle('schematic-open');
-  fitView();
+  // Delay fitView to let CSS transition complete
+  setTimeout(() => fitView(), 350);
 });
 document.getElementById('sch-close').addEventListener('click', () => {
   schEl.classList.remove('open');
   appEl.classList.remove('schematic-open');
-  fitView();
+  // Delay fitView to let CSS transition complete
+  setTimeout(() => fitView(), 350);
 });
 document.getElementById('build-bb').addEventListener('click', () => {
   const status = document.getElementById('bridge-status');
@@ -1538,6 +1645,19 @@ function frame(ts) {
       dyn.disp.textContent = `${(+inst.props.volts).toFixed(1)} V`;
     } else if (type === 'funcgen' && dyn) {
       dyn.disp.textContent = `${(+inst.props.hz).toFixed(1)} Hz`;
+    } else if (type === 'arduino' && dyn) {
+      // Update Arduino status LEDs
+      if (rt.powered) {
+        dyn.statusLED.setAttribute('fill', '#3adb6a');
+        dyn.statusLED.setAttribute('opacity', '1');
+      } else {
+        dyn.statusLED.setAttribute('fill', '#666');
+        dyn.statusLED.setAttribute('opacity', '0.3');
+      }
+      // TX/RX LEDs flash when Serial is active
+      const hasSerial = rt.arduino?.serialBuffer?.length > 0;
+      dyn.txLED.setAttribute('opacity', hasSerial ? '0.8' : '0');
+      dyn.rxLED.setAttribute('opacity', hasSerial ? '0.8' : '0');
     }
     // logic-level dots on powered IC outputs
     if (type === 'ic' && rt.powered && rt.outs) {
@@ -1553,6 +1673,13 @@ function frame(ts) {
       }
     }
   }
+
+  // Update serial monitor if open and Arduino selected
+  const serialMonitor = document.getElementById('serial-monitor');
+  if (serialMonitor.classList.contains('open') && sel && sel.kind === 'part' && sel.inst.def.sim?.type === 'arduino') {
+    updateSerialOutput();
+  }
+
   requestAnimationFrame(frame);
 }
 
