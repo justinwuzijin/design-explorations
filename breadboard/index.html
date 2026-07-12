@@ -6,8 +6,8 @@
   <title>Breadboard — WebGL</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=27" />
 </head>
 <body>
 
@@ -139,20 +139,16 @@
         </g>
       </svg>
       <div id="wirebar">
-        <div class="wb-swatches" id="wb-swatches"></div>
-        <label class="wb-custom" title="custom color">
-          <span class="wb-plus">+</span>
-          <input type="color" id="wb-color" value="#3fa54a" />
-        </label>
+        <div class="wb-swatches" id="wb-swatches">
+          <label class="wb-custom" title="custom color">
+            <span class="wb-plus">+</span>
+            <input type="color" id="wb-color" value="#3fa54a" />
+          </label>
+        </div>
       </div>
       <div id="canvas-tools">
         <button id="btn-schematic" title="open CircuitJS schematic">circuit</button>
-        <button id="btn-clear" title="clear the board" aria-label="clear the board">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
-        </button>
+        <button id="btn-clear" title="reset the board" aria-label="reset the board">reset</button>
       </div>
       <div id="zoom-controls">
         <button id="zoom-out" title="zoom out" aria-label="zoom out">&#8722;</button>
@@ -166,18 +162,19 @@
 
   <aside id="schematic">
     <div class="sch-head">
-      <span>circuitjs → breadboard</span>
+      <span>schematic ↔ breadboard</span>
       <button id="sch-close" aria-label="close">✕</button>
     </div>
     <iframe id="sch-frame" src="circuitjs/circuitjs.html?startCircuit=blank.txt" title="CircuitJS"></iframe>
     <div class="sch-import">
-      <div class="sch-tip">Draw your circuit in the simulator above, then click Build. (resistors, LEDs, switches, logic gates, D flip-flops, power &amp; ground are supported; scopes, analog switches &amp; other parts are skipped)</div>
+      <div class="sch-tip">Draw a conventional schematic above, then <b>build breadboard</b>. Or build on the board and click <b>→ schematic</b>. Tip: if a Falstad file has two circuits, import one at a time (e.g. <code>lab4-counter.txt</code>). Supported: resistors, LEDs, switches, logic gates (incl. multi-input), D flip-flops, logic I/O, power &amp; ground.</div>
       <div class="sch-row">
         <label class="import-file-btn">
           <input type="file" id="import-circuit" accept=".txt,.circuitjs" hidden />
           import circuit file
         </label>
         <button id="build-bb">build breadboard →</button>
+        <button id="build-sch">→ schematic</button>
         <span id="bridge-status"></span>
       </div>
     </div>
@@ -196,6 +193,6 @@
     </div>
   </aside>
 
-  <script type="module" src="main.js?v=37"></script>
+  <script type="module" src="main.js?v=56"></script>
 </body>
 </html>

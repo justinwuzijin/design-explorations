@@ -2,14 +2,15 @@
 // Board parts use pitch-unit pin offsets from the anchor pin (0,0) and snap to
 // holes. Free parts live off-board and expose snappable "ports" for wires.
 
-import { P, E } from './board.js';
+import { P, E } from './board.js?v=3';
 
 // ---- shared art helpers -----------------------------------------------------
 
-function lead(g, x1, y1, x2, y2, w = 2) {
-  E('line', { x1, y1, x2, y2, stroke: 'url(#metalG)', 'stroke-width': w, 'stroke-linecap': 'round' }, g);
+function lead(g, x1, y1, x2, y2, w = 1.6) {
+  E('line', { x1, y1, x2, y2, stroke: '#b6bac0', 'stroke-width': w, 'stroke-linecap': 'butt' }, g);
+  E('line', { x1, y1, x2, y2, stroke: 'rgba(255,255,255,0.35)', 'stroke-width': Math.max(0.5, w * 0.28), 'stroke-linecap': 'butt' }, g);
 }
-function txt(g, x, y, s, size = 6, fill = '#e8e6e0', anchor = 'middle', weight = 500) {
+function txt(g, x, y, s, size = 6, fill = '#e8e6e0', anchor = 'middle', weight = 400) {
   return E('text', {
     x, y, text: s, fill, 'font-size': size, 'font-weight': weight,
     'text-anchor': anchor, 'font-family': 'Inter, sans-serif', 'pointer-events': 'none',
@@ -39,50 +40,58 @@ export function fmtOhm(v) {
   return `${v} \u03A9`;
 }
 
-function drawAxialResistor(g, span, value) {
-  const L = span * P;
-  lead(g, 0, 0, L, 0, 1.7);
-  const bw = L * 0.6, bx = (L - bw) / 2, h = 11, y = -h / 2;
-  E('ellipse', { cx: L / 2, cy: 6.2, rx: bw / 2, ry: 2.6, fill: 'rgba(0,0,0,0.2)' }, g);   // contact shadow
-  E('rect', { x: bx, y, width: bw, height: h, rx: h / 2, fill: 'url(#resG)' }, g);          // domed-end body
-  const bands = resistorBands(value);
-  const n = bands.length;
-  bands.forEach((c, i) => {
-    const fx = bx + bw * (0.2 + (i / (n - 1)) * 0.6);
-    E('rect', { x: fx - 1.5, y: y + 0.4, width: 3, height: h - 0.8, fill: c }, g);
-  });
-  E('rect', { x: bx, y, width: bw, height: h, rx: h / 2, fill: 'url(#cylShade)' }, g);       // cylinder curvature
-  E('rect', { x: bx + 2.5, y: y + 1.3, width: bw - 5, height: 1.5, rx: 0.7, fill: 'rgba(255,255,255,0.5)' }, g);
+function placePhoto(g, href, x, y, w, h, { multiply = false } = {}) {
+  const im = E('image', { x, y, width: w, height: h, preserveAspectRatio: 'xMidYMid meet' }, g);
+  im.setAttribute('href', href);
+  im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', href);
+  // Product shots sit on black — multiply drops the backdrop on the light board
+  if (multiply) im.style.mixBlendMode = 'multiply';
+  return im;
 }
 
-function drawDIP(g, half, spanRows, label, sub = '') {
+function drawAxialResistor(g, span, _value) {
+  const L = span * P;
+  // Sharp metal leads into breadboard holes
+  lead(g, 0, 0, L * 0.16, 0, 1.5);
+  lead(g, L * 0.84, 0, L, 0, 1.5);
+  // Photo body (leads cropped out so hole tips stay vector-aligned)
+  const nest = E('svg', {
+    x: L * 0.14, y: -7, width: L * 0.72, height: 14,
+    viewBox: '70 8 278 46', overflow: 'hidden',
+  }, g);
+  placePhoto(nest, 'img/resistor.png', 0, 0, 418, 62, { multiply: true });
+}
+
+function drawDIP(g, half, spanRows, label) {
   const w = (half - 1) * P;
   const y0 = 0.36 * P, y1 = spanRows * P - 0.36 * P;
   const bh = y1 - y0;
-  // gull-wing legs with a highlight edge
-  const leg = (x, yTop, hgt) => {
-    E('rect', { x: x - 2.3, y: yTop, width: 4.6, height: hgt, rx: 1, fill: 'url(#metalG)' }, g);
-    E('rect', { x: x - 2.3, y: yTop, width: 1.4, height: hgt, fill: 'rgba(255,255,255,0.45)' }, g);
+  const bx = -0.45 * P, bw = w + 0.9 * P;
+  // Stepped DIP legs: wider shoulder under the body, thin tip into the hole
+  const leg = (x, holeY, towardBody) => {
+    const tipH = 3.2;
+    const tipTop = towardBody > holeY ? holeY : holeY - tipH;
+    const shTop = towardBody > holeY ? holeY + tipH : towardBody;
+    const shoulderH = Math.abs(towardBody - holeY) - tipH;
+    E('rect', { x: x - 0.85, y: tipTop, width: 1.7, height: tipH, fill: '#b8b4a8' }, g);
+    if (shoulderH > 0.5) {
+      E('rect', { x: x - 1.55, y: shTop, width: 3.1, height: shoulderH, fill: '#c4c0b4' }, g);
+      E('rect', { x: x - 1.55, y: shTop, width: 0.9, height: shoulderH, fill: 'rgba(255,255,255,0.28)' }, g);
+    }
   };
   for (let k = 0; k < half; k++) {
-    leg(k * P, -2, y0 + 2.5);
-    leg(k * P, y1 - 0.5, spanRows * P - y1 + 2.5);
+    leg(k * P, 0, y0);
+    leg(k * P, spanRows * P, y1);
   }
-  // matte black moulded body with rounded top/bottom shading
-  E('rect', { x: -0.5 * P, y: y0 + 2, width: w + P, height: bh, rx: 3, fill: 'rgba(0,0,0,0.28)' }, g);
-  E('rect', { x: -0.5 * P, y: y0, width: w + P, height: bh, rx: 2.5, fill: 'url(#dipG)' }, g);
-  E('rect', { x: -0.5 * P, y: y0, width: w + P, height: bh * 0.42, rx: 2.5, fill: 'rgba(255,255,255,0.06)' }, g);
-  E('rect', { x: -0.5 * P, y: y0 + bh * 0.72, width: w + P, height: bh * 0.28, fill: 'rgba(0,0,0,0.24)' }, g);
+  // Matte moulded body — sharp corners, chamfered top face
+  E('rect', { x: bx, y: y0, width: bw, height: bh, fill: '#2a2a2c' }, g);
+  E('rect', { x: bx + 1.6, y: y0 + 1.6, width: bw - 3.2, height: bh - 3.2, fill: '#1f1f21' }, g);
+  E('rect', { x: bx + 1.6, y: y0 + 1.6, width: bw - 3.2, height: (bh - 3.2) * 0.22, fill: 'rgba(255,255,255,0.035)' }, g);
   const cy = (y0 + y1) / 2;
-  // half-moon orientation notch on the left edge
-  E('path', { d: `M ${-0.5 * P} ${cy - 4.8} A 4.8 4.8 0 0 1 ${-0.5 * P} ${cy + 4.8} Z`, fill: '#0b0b0e' }, g);
-  E('path', { d: `M ${-0.5 * P} ${cy - 4.8} A 4.8 4.8 0 0 1 ${-0.5 * P} ${cy + 4.8}`, fill: 'none', stroke: 'rgba(255,255,255,0.1)', 'stroke-width': 0.7 }, g);
-  // pin-1 dimple
-  E('circle', { cx: 0.5, cy: y1 - 5.5, r: 1.9, fill: '#0b0b0e' }, g);
-  E('circle', { cx: 0.5, cy: y1 - 5.5, r: 1.9, fill: 'none', stroke: 'rgba(255,255,255,0.16)', 'stroke-width': 0.7 }, g);
-  const t = txt(g, w / 2, cy + 2.2, label, 6.6, '#cfcdc8', 'middle', 600);
-  t.setAttribute('letter-spacing', '0.05em');
-  if (sub) txt(g, w / 2, cy + 10, sub, 4.4, 'rgba(207,205,200,0.5)');
+  // Orientation notch + pin-1 dimple
+  E('path', { d: `M ${bx} ${cy - 4} A 4 4 0 0 1 ${bx} ${cy + 4} Z`, fill: '#141416' }, g);
+  E('circle', { cx: bx + 5.5, cy: y1 - 5.5, r: 1.35, fill: '#141416' }, g);
+  txt(g, w / 2, cy + 2.4, label, 8.2, '#ffffff', 'middle', 400);
 }
 
 // standard DIP pin geometry: anchor = upper-left pin. upper row L->R is pins
@@ -97,269 +106,163 @@ function dipPins(half, spanRows, names) {
 // ---- LED / caps / switches ---------------------------------------------------
 
 const LED_GLOW = { red: '#ff5a52', green: '#57e06a', yellow: '#ffe14a' };
-const DOME_LIT = { red: 'url(#ledRedG)', green: 'url(#ledGreenG)', yellow: 'url(#ledYellowG)' };
-const DOME_DIM = { red: 'url(#ledRedGd)', green: 'url(#ledGreenGd)', yellow: 'url(#ledYellowGd)' };
-const LED_RIM = { red: '#eab7ae', green: '#bfe2b6', yellow: '#eadfa8' };
+const DOME_LIT = { red: '#c43c36', green: '#3aad4a', yellow: '#d0b02c' };
+const DOME_DIM = { red: '#7a3834', green: '#3a6840', yellow: '#7a7034' };
+const LED_RIM = { red: '#9a7a74', green: '#7a9074', yellow: '#9a9068' };
 
 function drawLED(g, inst) {
-  lead(g, 0, -1, 0, 7, 1.7); lead(g, P, -1, P, 7, 1.7);
+  // Overhead LED: sharp leads into adjacent holes, flat cathode rim
+  lead(g, 0, 0, 0, 6, 1.45);
+  lead(g, P, 0, P, 6, 1.45);
   const cx = P / 2, cy = 1.2;
   const c = inst.props.color || 'red';
-  const glow = E('circle', { cx, cy, r: 14, fill: LED_GLOW[c], opacity: 0, filter: 'url(#ledGlow)' }, g);
-  E('ellipse', { cx, cy: cy + 6.6, rx: 8.6, ry: 2.4, fill: 'rgba(0,0,0,0.2)' }, g);            // contact shadow
-  // translucent plastic base flange with a flat on the cathode side
-  E('path', { d: `M ${cx + 6.6} ${cy - 6} A 8.8 8.8 0 1 0 ${cx + 6.6} ${cy + 6} Z`, fill: LED_RIM[c] }, g);
-  E('line', { x1: cx + 6.6, y1: cy - 6, x2: cx + 6.6, y2: cy + 6, stroke: 'rgba(0,0,0,0.16)', 'stroke-width': 1 }, g);
-  const body = E('circle', { cx, cy, r: 6.9, fill: DOME_DIM[c] }, g);                            // dome
-  E('ellipse', { cx: cx - 2.1, cy: cy - 2.6, rx: 2.4, ry: 1.7, fill: 'rgba(255,255,255,0.8)' }, g);
+  const glow = E('circle', { cx, cy, r: 12, fill: LED_GLOW[c], opacity: 0, filter: 'url(#ledGlow)' }, g);
+  glow.style.mixBlendMode = 'screen';
+  // Flange with cathode flat — no soft shadow / bubbly highlight
+  E('path', {
+    d: `M ${cx + 6.4} ${cy - 5.8} A 8.4 8.4 0 1 0 ${cx + 6.4} ${cy + 5.8} Z`,
+    fill: LED_RIM[c],
+  }, g);
+  E('line', {
+    x1: cx + 6.4, y1: cy - 5.8, x2: cx + 6.4, y2: cy + 5.8,
+    stroke: 'rgba(0,0,0,0.22)', 'stroke-width': 0.8, 'stroke-linecap': 'butt',
+  }, g);
+  const body = E('circle', { cx, cy, r: 6.5, fill: DOME_DIM[c] }, g);
+  E('circle', { cx, cy, r: 6.5, fill: 'none', stroke: 'rgba(0,0,0,0.18)', 'stroke-width': 0.6 }, g);
   inst._dyn = { glow, body, colorFill: DOME_LIT, colorDim: DOME_DIM };
 }
 
 function drawCeramic(g) {
-  lead(g, 0, -1, 0, 6, 1.7); lead(g, P, -1, P, 6, 1.7);
-  const cx = P / 2, cy = -1;
-  E('ellipse', { cx, cy: cy + 6, rx: 7.4, ry: 2.2, fill: 'rgba(0,0,0,0.2)' }, g);
-  E('path', { d: `M ${cx - 7} ${cy + 3} C ${cx - 8.4} ${cy - 9.5} ${cx + 8.4} ${cy - 9.5} ${cx + 7} ${cy + 3} Z`, fill: 'url(#ceramicG)' }, g);
-  E('ellipse', { cx: cx - 2, cy: cy - 3.6, rx: 2.6, ry: 1.7, fill: 'rgba(255,255,255,0.32)' }, g);
-  txt(g, cx, cy + 1.2, '103', 4.4, '#5a3d15', 'middle', 700);
+  lead(g, 0, 0, 0, -8, 1.45); lead(g, P, 0, P, -8, 1.45);
+  const cx = P / 2, cy = -10;
+  E('path', { d: `M ${cx - 7} ${cy + 4} C ${cx - 8} ${cy - 10} ${cx + 8} ${cy - 10} ${cx + 7} ${cy + 4} Z`, fill: '#c4a24e' }, g);
+  E('path', { d: `M ${cx - 7} ${cy + 4} C ${cx - 8} ${cy - 10} ${cx + 8} ${cy - 10} ${cx + 7} ${cy + 4} Z`, fill: 'none', stroke: '#8a7030', 'stroke-width': 0.6 }, g);
+  txt(g, cx, cy + 1, '103', 4.2, '#5a3d15', 'middle', 600);
 }
 
 function drawElectrolytic(g) {
-  lead(g, 0, -1, 0, 5, 1.7); lead(g, P, -1, P, 5, 1.7);
-  const cx = P / 2, cy = -2.5;
-  E('ellipse', { cx, cy: cy + 8.6, rx: 9, ry: 2.6, fill: 'rgba(0,0,0,0.22)' }, g);
-  E('circle', { cx, cy, r: 9.6, fill: '#1a2740' }, g);                         // blue sleeve
-  // light negative stripe on the cathode side
-  E('path', { d: `M ${cx + 5.6} ${cy - 7.8} A 9.6 9.6 0 0 1 ${cx + 5.6} ${cy + 7.8} Z`, fill: '#c9cdd6' }, g);
-  txt(g, cx + 7, cy - 3, '\u2212', 5.4, '#1a2740', 'middle', 800);
-  txt(g, cx + 7, cy + 3.6, '\u2212', 5.4, '#1a2740', 'middle', 800);
-  E('circle', { cx, cy, r: 7, fill: 'url(#elecG)' }, g);                       // aluminum top
-  E('path', { d: `M ${cx - 4.6} ${cy} L ${cx + 4.6} ${cy} M ${cx} ${cy - 4.6} L ${cx} ${cy + 4.6}`, stroke: 'rgba(0,0,0,0.5)', 'stroke-width': 1.1 }, g);
-  E('ellipse', { cx: cx - 2, cy: cy - 2.4, rx: 2.6, ry: 1.7, fill: 'rgba(255,255,255,0.16)' }, g);
-  txt(g, cx, cy - 12, '120\u00B5F', 4.4, 'rgba(0,0,0,0.5)');
+  lead(g, 0, 0, 0, -6, 1.45); lead(g, P, 0, P, -6, 1.45);
+  const cx = P / 2, cy = -12;
+  E('circle', { cx, cy, r: 9.2, fill: '#1a2740' }, g);
+  E('path', { d: `M ${cx + 5.2} ${cy - 7.4} A 9.2 9.2 0 0 1 ${cx + 5.2} ${cy + 7.4} Z`, fill: '#c9cdd6' }, g);
+  E('circle', { cx, cy, r: 6.6, fill: '#d0d3d8' }, g);
+  E('path', { d: `M ${cx - 4} ${cy} L ${cx + 4} ${cy} M ${cx} ${cy - 4} L ${cx} ${cy + 4}`, stroke: 'rgba(0,0,0,0.45)', 'stroke-width': 1 }, g);
+  txt(g, cx, cy - 14, '120\u00B5F', 4.0, 'rgba(0,0,0,0.45)', 'middle', 400);
 }
 
 function drawTactile(g, inst) {
   const w = 2 * P, h = 3 * P, cx = w / 2, cy = h / 2;
+  // Sharp leads into the four holes
   for (const [px, py] of [[0, 0], [2, 0], [0, 3], [2, 3]]) {
-    lead(g, px * P, py * P, px * P + (px ? -3 : 3), py * P + (py ? -4 : 4), 2.2);
+    lead(g, px * P, py * P, px * P + (px ? -3 : 3), py * P + (py ? -4 : 4), 1.55);
   }
-  E('rect', { x: -3, y: 0.4 * P + 2, width: w + 6, height: h - 0.8 * P, rx: 2.5, fill: 'rgba(0,0,0,0.25)' }, g);
-  E('rect', { x: -3, y: 0.4 * P, width: w + 6, height: h - 0.8 * P, rx: 2.5, fill: '#1c1d21' }, g);
-  E('rect', { x: -3, y: 0.4 * P, width: w + 6, height: 4, rx: 2, fill: 'rgba(255,255,255,0.1)' }, g);
-  const cap = E('circle', { cx, cy, r: 8.4, fill: 'url(#metalG)', stroke: '#4a4b50', 'stroke-width': 1 }, g);
-  E('circle', { cx, cy, r: 8.4, fill: 'none', stroke: 'rgba(255,255,255,0.28)', 'stroke-width': 0.8 }, g);
-  E('ellipse', { cx: cx - 2.4, cy: cy - 2.6, rx: 2.6, ry: 1.8, fill: 'rgba(255,255,255,0.4)' }, g);
+  // Overhead square housing — sharp corners, muted black (no softShadow / rx)
+  E('rect', { x: -3, y: 0.4 * P, width: w + 6, height: h - 0.8 * P, fill: '#1c1d21' }, g);
+  E('rect', { x: -3, y: 0.4 * P, width: w + 6, height: h - 0.8 * P, fill: 'none', stroke: '#323338', 'stroke-width': 0.7 }, g);
+  // Metal actuator (circle is the real top-down silhouette)
+  const cap = E('circle', { cx, cy, r: 8.2, fill: '#b6bac0', stroke: '#6e7278', 'stroke-width': 0.9 }, g);
+  E('circle', { cx, cy, r: 5.0, fill: 'none', stroke: 'rgba(255,255,255,0.16)', 'stroke-width': 0.7 }, g);
   inst._dyn = { cap };
 }
 
 function drawSPST(g, inst) {
-  lead(g, 0, 0, 0, 5, 1.7); lead(g, 2 * P, 0, 2 * P, 5, 1.7);
-  E('rect', { x: -5, y: -15, width: 2 * P + 10, height: 17, rx: 2.5, fill: '#1f3f78' }, g);
-  E('rect', { x: -5, y: -15, width: 2 * P + 10, height: 4, rx: 2, fill: 'rgba(255,255,255,0.2)' }, g);
-  E('rect', { x: -1, y: -12, width: 2 * P + 2, height: 11, rx: 1.5, fill: '#dfe2e6' }, g);          // slider channel
-  E('rect', { x: -1, y: -12, width: 2 * P + 2, height: 4, rx: 1.5, fill: 'rgba(0,0,0,0.08)' }, g);
-  const knob = E('rect', { x: 1, y: -11, width: 12, height: 9, rx: 1.4, fill: 'url(#metalG)', stroke: '#8b8e94', 'stroke-width': 0.6 }, g);
-  txt(g, 2 * P + 2, -17, 'ON', 4.2, 'rgba(0,0,0,0.45)');
+  lead(g, 0, 0, 0, 5, 1.5); lead(g, 2 * P, 0, 2 * P, 5, 1.5);
+  E('rect', { x: -5, y: -15, width: 2 * P + 10, height: 17, fill: '#1f3f78' }, g);
+  E('rect', { x: -1, y: -12, width: 2 * P + 2, height: 11, fill: '#dfe2e6' }, g);
+  const knob = E('rect', { x: 1, y: -11, width: 12, height: 9, fill: '#c0c4ca', stroke: '#8b8e94', 'stroke-width': 0.6 }, g);
+  txt(g, 2 * P + 2, -17, 'ON', 4.0, 'rgba(0,0,0,0.4)', 'middle', 400);
   inst._dyn = { knob, onX: 2 * P - 13, offX: 1 };
 }
 
 function drawSPDT(g, inst) {
-  for (const px of [0, 1, 2]) lead(g, px * P, 0, px * P, 5, 1.7);
-  E('rect', { x: -5, y: -15, width: 2 * P + 10, height: 17, rx: 3, fill: '#20222a' }, g);
-  E('rect', { x: -5, y: -15, width: 2 * P + 10, height: 4, rx: 2, fill: 'rgba(255,255,255,0.14)' }, g);
-  E('circle', { cx: P, cy: -6, r: 7.5, fill: 'url(#metalG)' }, g);                                  // threaded bushing
-  E('circle', { cx: P, cy: -6, r: 7.5, fill: 'none', stroke: 'rgba(0,0,0,0.3)', 'stroke-width': 1 }, g);
-  const lever = E('line', { x1: P, y1: -6, x2: P - 10, y2: -22, stroke: 'url(#metalG)', 'stroke-width': 3.6, 'stroke-linecap': 'round' }, g);
-  E('circle', { cx: P, cy: -6, r: 3.4, fill: '#3a3b40' }, g);
+  for (const px of [0, 1, 2]) lead(g, px * P, 0, px * P, 5, 1.5);
+  E('rect', { x: -5, y: -15, width: 2 * P + 10, height: 17, fill: '#20222a' }, g);
+  E('circle', { cx: P, cy: -6, r: 7.2, fill: '#c0c4ca' }, g);
+  const lever = E('line', { x1: P, y1: -6, x2: P - 10, y2: -22, stroke: '#c0c4ca', 'stroke-width': 3.2, 'stroke-linecap': 'butt' }, g);
+  E('circle', { cx: P, cy: -6, r: 3.2, fill: '#3a3b40' }, g);
   inst._dyn = { lever };
 }
 
 function drawPot(g, inst) {
-  for (const px of [0, 1, 2]) lead(g, px * P, 0, px * P, 6, 1.7);
-  E('rect', { x: -6, y: -2 * P - 6, width: 2 * P + 12, height: 2 * P + 8, rx: 2.5, fill: 'rgba(0,0,0,0.25)' }, g);
-  E('rect', { x: -6, y: -2 * P - 8, width: 2 * P + 12, height: 2 * P + 8, rx: 2.5, fill: 'url(#potG)' }, g);
-  E('rect', { x: -6, y: -2 * P - 8, width: 2 * P + 12, height: 4, rx: 2, fill: 'rgba(255,255,255,0.22)' }, g);
-  txt(g, P, -2 * P - 1, '103', 4.4, 'rgba(255,255,255,0.7)', 'middle', 600);
+  for (const px of [0, 1, 2]) lead(g, px * P, 0, px * P, 6, 1.5);
+  E('rect', { x: -6, y: -2 * P - 8, width: 2 * P + 12, height: 2 * P + 8, fill: '#2a6a3a' }, g);
+  txt(g, P, -2 * P - 1, '103', 4.2, 'rgba(255,255,255,0.65)', 'middle', 500);
   const cx = P, cy = -P - 1;
-  E('circle', { cx, cy, r: 9.4, fill: 'url(#screwG)' }, g);                                          // brass adjust screw
-  E('circle', { cx, cy, r: 9.4, fill: 'none', stroke: 'rgba(0,0,0,0.3)', 'stroke-width': 1 }, g);
+  E('circle', { cx, cy, r: 9.0, fill: '#c9a24a' }, g);
   const slot = E('g', {}, g);
-  E('line', { x1: cx - 6.2, y1: cy, x2: cx + 6.2, y2: cy, stroke: '#6b5f3c', 'stroke-width': 2.4, 'stroke-linecap': 'round' }, slot);
+  E('line', { x1: cx - 6.0, y1: cy, x2: cx + 6.0, y2: cy, stroke: '#6b5f3c', 'stroke-width': 2.2, 'stroke-linecap': 'butt' }, slot);
   inst._dyn = { slot, cx, cy };
 }
 
 function drawSMD0(g) {
-  lead(g, 0, 0, P, 0, 1.6);
-  E('rect', { x: P / 2 - 5.6, y: -3.8, width: 11.2, height: 7.6, rx: 0.8, fill: '#141519' }, g);
-  E('rect', { x: P / 2 - 5.6, y: -3.8, width: 2.8, height: 7.6, fill: 'url(#metalG)' }, g);
-  E('rect', { x: P / 2 + 2.8, y: -3.8, width: 2.8, height: 7.6, fill: 'url(#metalG)' }, g);
-  E('rect', { x: P / 2 - 3, y: -3.8, width: 6, height: 2, fill: 'rgba(255,255,255,0.06)' }, g);
-  txt(g, P / 2, 1.6, '0', 4.6, '#d8d8d8', 'middle', 600);
+  lead(g, 0, 0, P, 0, 1.4);
+  E('rect', { x: P / 2 - 5.4, y: -3.6, width: 10.8, height: 7.2, fill: '#141519' }, g);
+  E('rect', { x: P / 2 - 5.4, y: -3.6, width: 2.6, height: 7.2, fill: '#c0c4ca' }, g);
+  E('rect', { x: P / 2 + 2.8, y: -3.6, width: 2.6, height: 7.2, fill: '#c0c4ca' }, g);
+  txt(g, P / 2, 1.4, '0', 4.4, '#d8d8d8', 'middle', 500);
 }
 
 function drawBatterySnap(g) {
-  lead(g, 0, 0, 0, 4, 1.7);
-  lead(g, P, 0, P, 4, 1.7);
-  // insulated wires up to the connector
-  E('path', { d: `M 0 2 C -4 -8 -6 -12 -6 -18`, stroke: '#c33', 'stroke-width': 2.6, fill: 'none', 'stroke-linecap': 'round' }, g);
-  E('path', { d: `M ${P} 2 C ${P + 4} -8 ${P + 6} -12 ${P + 6} -18`, stroke: '#222', 'stroke-width': 2.6, fill: 'none', 'stroke-linecap': 'round' }, g);
-  // moulded snap connector body
-  E('rect', { x: -12, y: -35, width: P + 24, height: 21, rx: 5, fill: '#1a1b20' }, g);
-  E('rect', { x: -12, y: -35, width: P + 24, height: 5, rx: 3, fill: 'rgba(255,255,255,0.14)' }, g);
-  E('circle', { cx: -1, cy: -24.5, r: 4.6, fill: '#26272c', stroke: 'url(#metalG)', 'stroke-width': 2.2 }, g);  // + ring terminal
-  E('circle', { cx: P + 1, cy: -24.5, r: 3.4, fill: 'url(#metalG)' }, g);                                       // - button terminal
-  txt(g, P / 2, -38.5, '9V snap', 4.4, 'rgba(0,0,0,0.5)');
+  lead(g, 0, 0, 0, 4, 1.5);
+  lead(g, P, 0, P, 4, 1.5);
+  E('rect', { x: -12, y: -35, width: P + 24, height: 21, fill: '#1a1b20' }, g);
+  E('circle', { cx: -1, cy: -24.5, r: 4.4, fill: '#26272c', stroke: '#c0c4ca', 'stroke-width': 2 }, g);
+  E('circle', { cx: P + 1, cy: -24.5, r: 3.2, fill: '#c0c4ca' }, g);
+  txt(g, P / 2, -38.5, '9V snap', 4.0, 'rgba(0,0,0,0.4)', 'middle', 400);
 }
 
 function draw5V(g) {
-  lead(g, 0, 0, 0, 4, 1.7); lead(g, P, 0, P, 4, 1.7);
-  // small regulated power module
-  E('rect', { x: -9, y: -28, width: P + 18, height: 26, rx: 3, fill: '#8f2420' }, g);
-  E('rect', { x: -9, y: -28, width: P + 18, height: 26, rx: 3, fill: 'url(#cylShade)', opacity: 0.5 }, g);
-  E('rect', { x: -9, y: -28, width: P + 18, height: 4.5, rx: 2, fill: 'rgba(255,255,255,0.22)' }, g);
-  txt(g, P / 2, -15, '5V', 7, '#fff', 'middle', 700);
-  // solder pads for the two pins
-  E('circle', { cx: 0, cy: -5, r: 3, fill: '#c9a24a' }, g);
-  E('circle', { cx: P, cy: -5, r: 3, fill: '#c9a24a' }, g);
-  txt(g, 0, -3.2, '+', 4.6, '#5a2a10', 'middle', 800);
-  txt(g, P, -3.2, '\u2212', 4.6, '#5a2a10', 'middle', 800);
+  lead(g, 0, 0, 0, 4, 1.5); lead(g, P, 0, P, 4, 1.5);
+  E('rect', { x: -9, y: -28, width: P + 18, height: 26, fill: '#8f2420' }, g);
+  txt(g, P / 2, -15, '5V', 6.5, '#fff', 'middle', 600);
+  E('circle', { cx: 0, cy: -5, r: 2.8, fill: '#c9a24a' }, g);
+  E('circle', { cx: P, cy: -5, r: 2.8, fill: '#c9a24a' }, g);
 }
 
 // ---- free (off-board) parts ---------------------------------------------------
 
 function drawArduino(g, inst) {
-  const W = 214, H = 170;
-  // Classic Arduino teal-green PCB
-  const pcb = '#00979D';
-  const pcbDark = '#007A80';
-  E('rect', { x: 0, y: 0, width: W, height: H, rx: 8, fill: pcb, filter: 'url(#softShadow)' }, g);
-  // subtle edge bevel / copper tone
-  E('rect', { x: 0, y: 0, width: W, height: H, rx: 8, fill: 'none', stroke: pcbDark, 'stroke-width': 1.2 }, g);
-  E('rect', { x: 0, y: 0, width: W, height: 5, rx: 3, fill: 'rgba(255,255,255,0.14)' }, g);
+  // Photoreal Arduino Uno SMD — ports are calibrated to the header holes.
+  // Cropped photo maps so 0.1" header pitch ≈ 10.16 SVG units.
+  const scale = 10.16 / 31;
+  const ox = (51 - 138) * scale;   // USB sticks past teal left edge
+  const oy = (184 - 185) * scale;
+  const dw = 899 * scale;
+  const dh = 650 * scale;
 
-  // Mounting holes
-  for (const [mx, my] of [[10, 10], [W - 10, 10], [10, H - 10], [W - 14, H - 22]]) {
-    E('circle', { cx: mx, cy: my, r: 3.2, fill: '#0a0a0c', opacity: 0.55 }, g);
-    E('circle', { cx: mx, cy: my, r: 2.1, fill: 'none', stroke: 'rgba(255,255,255,0.25)', 'stroke-width': 0.6 }, g);
-  }
+  const im = E('image', {
+    x: ox, y: oy, width: dw, height: dh,
+    preserveAspectRatio: 'none',
+  }, g);
+  im.setAttribute('href', 'img/arduino-smd.png?v=4');
+  im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', 'img/arduino-smd.png?v=4');
 
-  // USB Type-B connector (left, top)
-  E('rect', { x: -14, y: 16, width: 18, height: 16, rx: 1.5, fill: 'url(#metalG)' }, g);
-  E('rect', { x: -11, y: 19, width: 12, height: 10, rx: 1, fill: '#0a0a0c' }, g);
-  E('rect', { x: -9, y: 21, width: 7, height: 6, fill: '#2a2a2e' }, g);
-
-  // Barrel jack (left, bottom)
-  E('rect', { x: -10, y: 100, width: 28, height: 36, rx: 4, fill: '#17181c' }, g);
-  E('rect', { x: -10, y: 100, width: 28, height: 6, rx: 2, fill: 'rgba(255,255,255,0.08)' }, g);
-  E('circle', { cx: 4, cy: 118, r: 7.5, fill: '#0a0a0c' }, g);
-  E('circle', { cx: 4, cy: 118, r: 3.2, fill: 'url(#metalG)' }, g);
-
-  // Digital pins header (top, 2 sections: 8 pins + 6 pins)
-  E('rect', { x: 123, y: 2, width: 8 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
-  E('rect', { x: 41, y: 2, width: 6 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
-  // Header pins glints
-  for (let i = 0; i < 8; i++) {
-    E('rect', { x: 125 + i * 10.16, y: 3.5, width: 2.2, height: 7, rx: 0.4, fill: 'rgba(200,180,100,0.35)' }, g);
-  }
-  for (let i = 0; i < 6; i++) {
-    E('rect', { x: 43 + i * 10.16, y: 3.5, width: 2.2, height: 7, rx: 0.4, fill: 'rgba(200,180,100,0.35)' }, g);
-  }
-
-  // Power header (bottom left)
-  E('rect', { x: 41, y: H - 12, width: 8 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
-  for (let i = 0; i < 8; i++) {
-    E('rect', { x: 43 + i * 10.16, y: H - 10.5, width: 2.2, height: 7, rx: 0.4, fill: 'rgba(200,180,100,0.35)' }, g);
-  }
-
-  // Analog pins header (bottom right)
-  E('rect', { x: 143, y: H - 12, width: 6 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
-  for (let i = 0; i < 6; i++) {
-    E('rect', { x: 145 + i * 10.16, y: H - 10.5, width: 2.2, height: 7, rx: 0.4, fill: 'rgba(200,180,100,0.35)' }, g);
-  }
-
-  // ICSP header (2x3)
-  E('rect', { x: 178, y: 118, width: 22, height: 16, rx: 1.5, fill: '#17181c' }, g);
-  for (let r = 0; r < 2; r++) {
-    for (let c = 0; c < 3; c++) {
-      E('circle', { cx: 183 + c * 6, cy: 123 + r * 6, r: 1.4, fill: 'rgba(200,180,100,0.45)' }, g);
-    }
-  }
-
-  // Voltage regulator
-  E('rect', { x: 28, y: 88, width: 18, height: 12, rx: 1, fill: '#1a1b20' }, g);
-  E('path', { d: 'M28 88 L37 82 L46 88 Z', fill: '#1a1b20' }, g);
-
-  // Crystal oscillator
-  E('rect', { x: 58, y: 78, width: 14, height: 8, rx: 3, fill: '#c8c4b8', stroke: '#9a9688', 'stroke-width': 0.5 }, g);
-
-  // Small SMD caps / components
-  E('rect', { x: 54, y: 92, width: 6, height: 3.5, rx: 0.5, fill: '#c9a24a' }, g);
-  E('rect', { x: 64, y: 92, width: 6, height: 3.5, rx: 0.5, fill: '#c9a24a' }, g);
-  E('rect', { x: 36, y: 58, width: 5, height: 8, rx: 0.5, fill: '#2a5a9a' }, g);
-  E('rect', { x: 44, y: 58, width: 5, height: 8, rx: 0.5, fill: '#2a5a9a' }, g);
-
-  // Reset button
-  E('rect', { x: 22, y: 42, width: 12, height: 12, rx: 1.5, fill: '#17181c' }, g);
-  E('circle', { cx: 28, cy: 48, r: 3.2, fill: '#c43c3c' }, g);
-  txt(g, 28, 62, 'RESET', 3.2, 'rgba(255,255,255,0.55)');
-
-  // ATMEGA328P chip
-  E('rect', { x: 76, y: 98, width: 96, height: 26, rx: 2.5, fill: 'url(#dipG)' }, g);
-  E('circle', { cx: 82, cy: 104, r: 1.6, fill: '#3a3a38' }, g); // pin 1 marker
-  txt(g, 124, 114, 'ATMEGA328P', 5.4, '#cfcdc8');
-
-  // Branding
-  txt(g, 107, 58, 'ARDUINO', 11, '#eaf8f8', 'middle', 700);
-  txt(g, 107, 72, 'UNO', 9, 'rgba(234,248,248,0.85)', 'middle', 600);
-
-  // Status LEDs (right side)
-  const statusLED = E('circle', { cx: 190, cy: 46, r: 3, fill: '#3adb6a' }, g);
-  txt(g, 184, 49, 'ON', 3.8, 'rgba(255,255,255,0.75)', 'end');
-  const txLED = E('circle', { cx: 190, cy: 56, r: 2.2, fill: '#ff8f2e', opacity: 0 }, g);
-  txt(g, 184, 58, 'TX', 3.2, 'rgba(255,255,255,0.65)', 'end');
-  const rxLED = E('circle', { cx: 190, cy: 64, r: 2.2, fill: '#ff8f2e', opacity: 0 }, g);
-  txt(g, 184, 66, 'RX', 3.2, 'rgba(255,255,255,0.65)', 'end');
-
-  // Pin labels - Digital pins
-  const pinSpacing = 10.16;
-
-  for (let i = 0; i <= 7; i++) {
-    const x = 123 + (7 - i) * pinSpacing;
-    txt(g, x + 5, 16, i.toString(), 3.4, 'rgba(255,255,255,0.9)');
-  }
-
-  for (let i = 8; i <= 13; i++) {
-    const x = 41 + (13 - i) * pinSpacing;
-    txt(g, x + 5, 16, i.toString(), 3.4, 'rgba(255,255,255,0.9)');
-  }
-
-  // Power pin labels
-  const powerLabels = ['5V', '5V', 'GND', 'GND', 'VIN'];
-  for (let i = 0; i < powerLabels.length; i++) {
-    const x = 41 + (4 - i) * pinSpacing;
-    txt(g, x + 5, H - 16, powerLabels[i], 3.4, 'rgba(255,255,255,0.9)');
-  }
-
-  for (let i = 0; i < 6; i++) {
-    const x = 143 + (5 - i) * pinSpacing;
-    txt(g, x + 5, H - 16, `A${i}`, 3.4, 'rgba(255,255,255,0.9)');
-  }
+  // Status LED overlays (photo already has LEDs; these tint for sim feedback)
+  const led = (x, y, fill, opacity = 0) => {
+    const el = E('rect', {
+      x: x - 2.2, y: y - 1.2, width: 4.4, height: 2.4,
+      fill, opacity, 'pointer-events': 'none',
+    }, g);
+    el.style.mixBlendMode = 'screen';
+    return el;
+  };
+  // Approx ON / TX / RX on the right edge of the board photo
+  const statusLED = led(243, 72, '#3adb6a', 0.55);
+  const txLED = led(243, 82, '#ff8f2e', 0);
+  const rxLED = led(243, 90, '#ff8f2e', 0);
 
   inst._dyn = { statusLED, txLED, rxLED };
 }
 
-// off-board 9V battery photo with two flying terminal leads ending in ports
+function mapArduinoPin(imgX, imgY) {
+  const scale = 10.16 / 31;
+  return [(imgX - 138) * scale, (imgY - 185) * scale];
+}
+
+// off-board 9V battery photo — ports sit on the snap terminals
 function drawBattery(g) {
   const W = 46, H = 84;
-  // red (+) and black (-) leads curving out of the top terminals to the ports
-  E('path', { d: 'M 18 3 C 12 -6 10 -10 10 -18', stroke: '#d43c3c', 'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round' }, g);
-  E('path', { d: 'M 29 3 C 35 -6 36 -10 36 -18', stroke: '#26262a', 'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round' }, g);
-  const im = E('image', { x: 0, y: 0, width: W, height: H, preserveAspectRatio: 'xMidYMid meet' }, g);
-  im.setAttribute('href', 'img/battery.png');
-  im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', 'img/battery.png');
-  txt(g, 2, -15, '+', 8, '#d43c3c', 'middle', 800);
-  txt(g, 44, -15, '\u2212', 8, '#26262a', 'middle', 800);
+  placePhoto(g, 'img/battery.png', 0, 0, W, H);
 }
 
 function drawBattery9V(g) {
@@ -481,23 +384,24 @@ function drawPCB(g) {
 
 const HC14 = ['1A', '1Y', '2A', '2Y', '3A', '3Y', 'GND', '4Y', '4A', '5Y', '5A', '6Y', '6A', 'VCC'];
 const HC08 = ['1A', '1B', '1Y', '2A', '2B', '2Y', 'GND', '3Y', '3A', '3B', '4Y', '4A', '4B', 'VCC'];
-const HC32 = HC08;  // OR gates
-const HC00 = HC08;  // NAND gates
-const HC02 = HC08;  // NOR gates
-const HC86 = HC08;  // XOR gates
+const HC32 = HC08;  // OR gates — same pinout as AND
+const HC00 = HC08;  // NAND gates — same pinout as AND
+// 74HC02 NOR has outputs on pins 1/4/10/13 (different from HC08!)
+const HC02 = ['1Y', '1A', '1B', '2Y', '2A', '2B', 'GND', '3A', '3B', '3Y', '4A', '4B', '4Y', 'VCC'];
+const HC86 = HC08;  // XOR gates — same pinout as AND
 const HC283 = ['S2', 'B2', 'A2', 'S1', 'A1', 'B1', 'C0', 'GND', 'C4', 'S4', 'B4', 'A4', 'S3', 'A3', 'B3', 'VCC'];
 const HC153 = ['1G', 'B', '1C3', '1C2', '1C1', '1C0', '1Y', 'GND', '2Y', '2C0', '2C1', '2C2', '2C3', 'A', '2G', 'VCC'];
 const CD4013 = ['Q1', 'Q1N', 'CLK1', 'RST1', 'D1', 'SET1', 'GND', 'SET2', 'D2', 'RST2', 'CLK2', 'Q2N', 'Q2', 'VCC'];
 const NE555 = ['GND', 'TRIG', 'OUT', 'RESET', 'CTRL', 'THRES', 'DISCH', 'VCC'];
 const MEGA328 = Array.from({ length: 28 }, (_, i) => `P${i + 1}`);
 
-function dipDef(id, name, half, spanRows, label, icType, names, sub) {
+function dipDef(id, name, half, spanRows, label, icType, names) {
   return {
     id, cat: 'ics', name, kind: 'board',
     pins: dipPins(half, spanRows, names),
     sim: { type: 'ic', icType },
     props: {},
-    draw: (g) => drawDIP(g, half, spanRows, label, sub),
+    draw: (g) => drawDIP(g, half, spanRows, label),
     thumbImg: 'img/ic.png',   // photo in the tray; vector on the board so legs land in the holes
     thumb: { x: -12, y: -8, w: (half - 1) * P + 24, h: spanRows * P + 16 },
   };
@@ -519,14 +423,11 @@ const rdef = (id, value, name, filter = '') => ({
   sim: { type: 'resistor' },
   props: { ohms: value },
   draw: (g, inst) => drawAxialResistor(g, 3, inst.props.ohms),
-  img: 'img/resistor.png', filter,          // real photo, recolored per value
-  imgBox: { x: -6, y: -13, w: 3 * P + 12, h: 26 },
+  thumbImg: 'img/resistor.png', filter,
   thumb: { x: -4, y: -14, w: 3 * P + 8, h: 28 },
 });
 
-// Palette shows the LED photo; on the canvas it draws as vector so its two leads
-// sit exactly on the pin holes (the side-view photo's splayed legs can't align
-// to two adjacent holes).
+// LED photo body + sharp leads seated in adjacent holes
 const ledDef = (id, color, name, thumbFilter = '') => ({
   id, cat: 'leds', name, kind: 'board',
   pins: [{ x: 0, y: 0, name: 'a' }, { x: 1, y: 0, name: 'k' }],
@@ -543,7 +444,7 @@ export const CATALOG = [
     id: 'button', cat: 'switches', name: 'push button', kind: 'board',
     pins: [{ x: 0, y: 0, name: 'a1' }, { x: 2, y: 0, name: 'a2' }, { x: 0, y: 3, name: 'b1' }, { x: 2, y: 3, name: 'b2' }],
     sim: { type: 'button' }, props: {},
-    draw: drawTactile, thumbImg: 'img/button.png',   // photo in the tray; vector on the board so pins land in the holes
+    draw: drawTactile, thumbImg: 'img/button.png',
     thumb: { x: -8, y: -4, w: 2 * P + 16, h: 3 * P + 8 },
   },
 
@@ -554,69 +455,74 @@ export const CATALOG = [
   ledDef('led', 'red', 'LED'),
 
   // --- ics (single palette item; pick the chip once placed/selected)
-  { ...dipDef('hc14', 'SN74HC14N inverter', 7, 3, 'SN74HC14N', 'hc14', HC14, 'hex inverter'), paletteName: 'logic chip' },
-  { ...dipDef('hc08', 'SN74HC08N AND', 7, 3, 'SN74HC08N', 'hc08', HC08, 'quad AND'), hidden: true },
-  { ...dipDef('hc32', 'SN74HC32N OR', 7, 3, 'SN74HC32N', 'hc32', HC32, 'quad OR'), hidden: true },
-  { ...dipDef('hc00', 'SN74HC00N NAND', 7, 3, 'SN74HC00N', 'hc00', HC00, 'quad NAND'), hidden: true },
-  { ...dipDef('hc02', 'SN74HC02N NOR', 7, 3, 'SN74HC02N', 'hc02', HC02, 'quad NOR'), hidden: true },
-  { ...dipDef('hc86', 'SN74HC86N XOR', 7, 3, 'SN74HC86N', 'hc86', HC86, 'quad XOR'), hidden: true },
-  { ...dipDef('hc283', 'CD74HC283E adder', 8, 3, 'CD74HC283E', 'hc283', HC283, '4-bit adder'), hidden: true },
-  { ...dipDef('hc153', 'SN74HC153N mux', 8, 3, 'SN74HC153N', 'hc153', HC153, 'dual 4:1 mux'), hidden: true },
-  { ...dipDef('cd4013', 'CD4013BE flip-flop', 7, 3, 'CD4013BE', 'cd4013', CD4013, 'dual D-FF'), hidden: true },
-  { ...dipDef('ne555', 'NE555P timer', 4, 3, 'NE555P', 'ne555', NE555, 'timer'), hidden: true },
+  { ...dipDef('hc14', 'SN74HC14N inverter', 7, 3, 'SN74HC14N', 'hc14', HC14), paletteName: 'logic chip' },
+  { ...dipDef('hc08', 'SN74HC08N AND', 7, 3, 'SN74HC08N', 'hc08', HC08), hidden: true },
+  { ...dipDef('hc32', 'SN74HC32N OR', 7, 3, 'SN74HC32N', 'hc32', HC32), hidden: true },
+  { ...dipDef('hc00', 'SN74HC00N NAND', 7, 3, 'SN74HC00N', 'hc00', HC00), hidden: true },
+  { ...dipDef('hc02', 'SN74HC02N NOR', 7, 3, 'SN74HC02N', 'hc02', HC02), hidden: true },
+  { ...dipDef('hc86', 'SN74HC86N XOR', 7, 3, 'SN74HC86N', 'hc86', HC86), hidden: true },
+  { ...dipDef('hc283', 'CD74HC283E adder', 8, 3, 'CD74HC283E', 'hc283', HC283), hidden: true },
+  { ...dipDef('hc153', 'SN74HC153N mux', 8, 3, 'SN74HC153N', 'hc153', HC153), hidden: true },
+  { ...dipDef('cd4013', 'CD4013BE flip-flop', 7, 3, 'CD4013BE', 'cd4013', CD4013), hidden: true },
+  { ...dipDef('ne555', 'NE555P timer', 4, 3, 'NE555P', 'ne555', NE555), hidden: true },
 
   // --- power (single source): a free 9V battery wired to the board
   {
     id: 'pow5', cat: 'power', name: '9V battery', kind: 'free',
-    ports: [{ x: 10, y: -18, name: 'pos' }, { x: 36, y: -18, name: 'neg' }],
+    ports: [{ x: 16, y: 10, name: 'pos' }, { x: 30, y: 10, name: 'neg' }],
     sim: { type: 'supply', volts: 5 }, props: { volts: 5 },
     draw: drawBattery,
     size: { w: 46, h: 84 },
-    thumb: { x: -6, y: -26, w: 58, h: 116 },
+    thumb: { x: -4, y: -4, w: 54, h: 92 },
   },
 
   // --- Arduino Uno (free part with digital and analog I/O)
   {
     id: 'arduino', cat: 'power', name: 'arduino uno', kind: 'free',
     ports: (() => {
-      const H = 170;
-      const pinSpacing = 10.16;  // 0.1" header spacing in SVG units
+      // Pin centers calibrated to img/arduino-smd.png header holes
+      const topY = 211, botY = 791;
+      const dig13to8 = [473, 504, 535, 566, 597, 628]; // left→right
+      const dig7to0 = [677, 708, 739, 770, 801, 832, 863, 894]; // left→right
+      // POWER L→R: IOREF, RESET, 3.3V, 5V, GND, GND, Vin
+      const power = [414, 445, 476, 507, 538, 569, 600];
+      // ANALOG IN L→R: A0…A5 (real board order)
+      const analog = [738, 769, 800, 831, 862, 893];
       const ports = [];
 
-      // Digital pins 0-7 (top header, right section, right to left)
-      for (let i = 0; i <= 7; i++) {
-        const x = 123 + (7 - i) * pinSpacing + 5;
-        ports.push({ x, y: 7, name: `D${i}` });
-      }
+      dig7to0.forEach((imgX, i) => {
+        const [x, y] = mapArduinoPin(imgX, topY);
+        ports.push({ x, y, name: `D${7 - i}` });
+      });
+      dig13to8.forEach((imgX, i) => {
+        const [x, y] = mapArduinoPin(imgX, topY);
+        ports.push({ x, y, name: `D${13 - i}` });
+      });
 
-      // Digital pins 8-13 (top header, left section, right to left)
-      for (let i = 8; i <= 13; i++) {
-        const x = 41 + (13 - i) * pinSpacing + 5;
-        ports.push({ x, y: 7, name: `D${i}` });
-      }
+      const [x33, yP] = mapArduinoPin(power[2], botY);
+      const [x5] = mapArduinoPin(power[3], botY);
+      const [xG1] = mapArduinoPin(power[4], botY);
+      const [xG2] = mapArduinoPin(power[5], botY);
+      const [xVin] = mapArduinoPin(power[6], botY);
+      ports.push({ x: x5, y: yP, name: '5V', volts: 5 });
+      ports.push({ x: x33, y: yP, name: '3V3', volts: 3.3 });
+      ports.push({ x: xG1, y: yP, name: 'GND', volts: 0 });
+      ports.push({ x: xG2, y: yP, name: 'GND2', volts: 0 });
+      ports.push({ x: xVin, y: yP, name: 'VIN' });
 
-      // Power pins (bottom left header) - Actual Arduino order: IOREF, RESET, 3.3V, 5V, GND, GND, Vin, (NC)
-      // We'll expose: 5V, 3.3V, GND, GND, VIN
-      ports.push({ x: 41 + 3 * pinSpacing + 5, y: H - 5, name: '5V', volts: 5 });
-      ports.push({ x: 41 + 2 * pinSpacing + 5, y: H - 5, name: '3V3', volts: 3.3 });
-      ports.push({ x: 41 + 4 * pinSpacing + 5, y: H - 5, name: 'GND', volts: 0 });
-      ports.push({ x: 41 + 5 * pinSpacing + 5, y: H - 5, name: 'GND2', volts: 0 });
-      ports.push({ x: 41 + 6 * pinSpacing + 5, y: H - 5, name: 'VIN' });
-
-      // Analog pins A0-A5 (bottom right header, right to left)
-      for (let i = 0; i < 6; i++) {
-        const x = 143 + (5 - i) * pinSpacing + 5;
-        ports.push({ x, y: H - 5, name: `A${i}` });
-      }
+      analog.forEach((imgX, i) => {
+        const [x, y] = mapArduinoPin(imgX, botY);
+        ports.push({ x, y, name: `A${i}` });
+      });
 
       return ports;
     })(),
     sim: { type: 'arduino' },
     props: { code: '' },
     draw: drawArduino,
-    thumbImg: 'img/arduino.jpg',
-    size: { w: 214, h: 170 },
-    thumb: { x: -10, y: -10, w: 234, h: 190 },
+    thumbImg: 'img/arduino-smd.png?v=4',
+    size: { w: 266, h: 207 },
+    thumb: { x: -32, y: -4, w: 300, h: 216 },
   },
 ];
 

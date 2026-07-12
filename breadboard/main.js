@@ -1,8 +1,9 @@
 // Breadboard simulator: palette, placement, wiring, inspector, sim loop.
 
-import { P, E, BODY, buildBoard, nearestHole, HOLE_BY_ID, baseNetOf } from './board.js';
-import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=16';
+import { P, E, BODY, buildBoard, nearestHole, HOLE_BY_ID, baseNetOf } from './board.js?v=3';
+import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=32';
 import { runSim, portNode } from './sim.js?v=3';
+import { importFromSim, exportBreadboardToText } from './bridge.js?v=9';
 
 const svg = document.getElementById('canvas');
 const world = document.getElementById('world');
@@ -32,27 +33,106 @@ function applyView() {
   if (zoomPct) zoomPct.textContent = `${Math.round(view.k * 100)}%`;
 }
 
-// zoom in/out in 10% steps, anchored on the canvas center
+// zoom in/out in ~15% multiplicative steps, anchored on the canvas center
 function zoomStep(dir) {
   const cx = stage.clientWidth / 2, cy = stage.clientHeight / 2;
   const k0 = view.k;
-  let k1 = Math.min(3, Math.max(0.4, Math.round(k0 * 10) / 10 + dir * 0.1));
-  if (k1 === k0) return;
+  const factor = dir > 0 ? 1.15 : 1 / 1.15;
+  let k1 = Math.min(3, Math.max(0.25, k0 * factor));
+  // snap near 100% so it feels intentional
+  if (Math.abs(k1 - 1) < 0.04) k1 = 1;
+  if (Math.abs(k1 - k0) < 0.001) return;
   view.x = cx - ((cx - view.x) / k0) * k1;
   view.y = cy - ((cy - view.y) / k0) * k1;
   view.k = k1;
   applyView();
   refreshSelBox();
 }
+
+/** World-space axis-aligned bounds of everything on the canvas. */
+function contentBounds() {
+  let minX = BODY.x, minY = BODY.y;
+  let maxX = BODY.x + BODY.w, maxY = BODY.y + BODY.h;
+
+  const expand = (x, y, pad = 0) => {
+    if (x - pad < minX) minX = x - pad;
+    if (y - pad < minY) minY = y - pad;
+    if (x + pad > maxX) maxX = x + pad;
+    if (y + pad > maxY) maxY = y + pad;
+  };
+
+  for (const inst of state.parts) {
+    if (inst.def.kind === 'board' && inst.holes?.length) {
+      for (const id of inst.holes) {
+        const h = HOLE_BY_ID.get(id);
+        if (h) expand(h.x, h.y, P * 0.6);
+      }
+    } else {
+      const s = inst.def.size || { w: 40, h: 40 };
+      const x = inst.x ?? 0, y = inst.y ?? 0;
+      expand(x, y);
+      expand(x + s.w, y + s.h);
+      // ports may stick out (battery leads, Arduino headers)
+      if (inst.def.ports) {
+        for (const port of inst.def.ports) {
+          const [px, py] = portWorld(inst, port);
+          expand(px, py, 8);
+        }
+      }
+    }
+  }
+
+  for (const w of state.wires) {
+    try {
+      const [x1, y1] = endpointPos(w.a);
+      const [x2, y2] = endpointPos(w.b);
+      expand(x1, y1, 4);
+      expand(x2, y2, 4);
+    } catch (_) { /* endpoint may be stale mid-clear */ }
+  }
+
+  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+}
+
+/** Fit and center all parts in the visible stage area (accounts for open panels). */
 function fitView() {
-  const w = stage.clientWidth, h = stage.clientHeight;
-  const k = Math.min((w - 80) / BODY.w, (h - 130) / BODY.h, 1.2);
+  const stageRect = stage.getBoundingClientRect();
+  let vw = stageRect.width;
+  let vh = stageRect.height;
+  if (vw < 40 || vh < 40) return;
+
+  // Schematic is position:fixed over the right half — subtract any overlap
+  if (appEl.classList.contains('schematic-open') && schEl) {
+    const schRect = schEl.getBoundingClientRect();
+    const overlapX = Math.max(0, stageRect.right - schRect.left);
+    vw = Math.max(80, vw - overlapX);
+  }
+  // Serial monitor sits over the bottom — subtract any overlap
+  const serialEl = document.getElementById('serial-monitor');
+  if (appEl.classList.contains('serial-open') && serialEl) {
+    const serRect = serialEl.getBoundingClientRect();
+    const overlapY = Math.max(0, stageRect.bottom - serRect.top);
+    vh = Math.max(80, vh - overlapY);
+  }
+
+  const b = contentBounds();
+  const padX = 56;
+  const padY = 48;
+  const availW = Math.max(80, vw - padX * 2);
+  const availH = Math.max(80, vh - padY * 2);
+
+  let k = Math.min(availW / Math.max(b.w, 1), availH / Math.max(b.h, 1));
+  k = Math.min(1.2, Math.max(0.2, k));
+
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
   view = {
     k,
-    x: (w - BODY.w * k) / 2 - BODY.x * k,
-    y: (h - BODY.h * k) / 2 - BODY.y * k,   // vertically centered in the canvas
+    x: vw / 2 - cx * k,
+    y: vh / 2 - cy * k,
   };
   applyView();
+  refreshSelBox();
 }
 function toWorld(e) {
   const r = svg.getBoundingClientRect();
@@ -180,9 +260,10 @@ function positionPart(inst) {
 function wirePath(x1, y1, x2, y2) {
   const dx = x2 - x1, dy = y2 - y1;
   const len = Math.hypot(dx, dy) || 1;
-  const sag = Math.min(30, len * 0.22);
-  const mx = (x1 + x2) / 2 - (dy / len) * sag;
-  const my = (y1 + y2) / 2 + (dx / len) * sag;
+  // Slight routing bend — not a soft cartoon sag
+  const bend = Math.min(14, len * 0.12);
+  const mx = (x1 + x2) / 2 - (dy / len) * bend;
+  const my = (y1 + y2) / 2 + (dx / len) * bend;
   return `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
 }
 function renderWire(w) {
@@ -192,17 +273,17 @@ function renderWire(w) {
   const [x1, y1] = endpointPos(w.a);
   const [x2, y2] = endpointPos(w.b);
   const d = wirePath(x1, y1, x2, y2);
-  E('path', { d, stroke: 'rgba(0,0,0,0.25)', 'stroke-width': (w.kind === 'gator' ? 6.5 : 4.6), fill: 'none', 'stroke-linecap': 'round', transform: 'translate(0,1.6)' }, g);
-  E('path', { d, stroke: w.color, 'stroke-width': w.kind === 'gator' ? 5 : 3.4, fill: 'none', 'stroke-linecap': 'round' }, g);
-  E('path', { d, stroke: 'rgba(255,255,255,0.28)', 'stroke-width': 1.1, fill: 'none', 'stroke-linecap': 'round', transform: 'translate(0,-0.9)' }, g);
+  const thick = w.kind === 'gator' ? 4.2 : 2.8;
+  E('path', { d, stroke: 'rgba(0,0,0,0.2)', 'stroke-width': thick + 1.2, fill: 'none', 'stroke-linecap': 'butt', transform: 'translate(0,1)' }, g);
+  E('path', { d, stroke: w.color, 'stroke-width': thick, fill: 'none', 'stroke-linecap': 'butt' }, g);
   for (const [x, y] of [[x1, y1], [x2, y2]]) {
     if (w.kind === 'gator') {
-      E('path', { d: `M ${x - 4} ${y - 6} L ${x} ${y} L ${x + 4} ${y - 6}`, stroke: 'url(#metalG)', 'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round' }, g);
+      E('path', { d: `M ${x - 3.5} ${y - 5} L ${x} ${y} L ${x + 3.5} ${y - 5}`, stroke: '#c0c4ca', 'stroke-width': 2.4, fill: 'none', 'stroke-linecap': 'butt' }, g);
     } else {
-      E('circle', { cx: x, cy: y, r: 2.1, fill: 'url(#metalG)' }, g);
+      // Exposed metal tip seated in the hole
+      E('rect', { x: x - 1.1, y: y - 1.1, width: 2.2, height: 2.2, fill: '#c0c4ca' }, g);
     }
   }
-  // invisible fat hit path for selection
   const hit = E('path', { d, stroke: 'rgba(0,0,0,0)', 'stroke-width': 12, fill: 'none' }, g);
   hit.addEventListener('pointerdown', (e) => { e.stopPropagation(); select({ kind: 'wire', wire: w }); });
 }
@@ -241,7 +322,7 @@ function refreshSelBox() {
   const hs = 8 * s;
   for (const [hx, hy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
     const sq = E('rect', {
-      x: hx - hs / 2, y: hy - hs / 2, width: hs, height: hs, rx: 1.2 * s,
+      x: hx - hs / 2, y: hy - hs / 2, width: hs, height: hs,
       fill: '#fff', stroke: '#2f6fed', 'stroke-width': 1.6 * s,
     }, selBox);
     sq.style.cursor = 'grab';
@@ -508,16 +589,14 @@ void loop() {
       uploadRow.className = 'ins-row';
       const uploadBtn = document.createElement('button');
       uploadBtn.textContent = 'upload sketch';
-      uploadBtn.style.cssText = 'width:100%;padding:8px;border:none;border-radius:6px;background:#2f6fed;color:#fff;cursor:pointer;font-weight:500;';
+      uploadBtn.className = 'ins-text-btn';
       uploadBtn.onclick = () => {
         if (inst.rt && inst.rt.arduino) {
           const result = inst.rt.arduino.loadSketch(inst.props.code);
           if (result.success) {
             uploadBtn.textContent = 'uploaded \u2713';
-            uploadBtn.style.background = '#3adb6a';
             setTimeout(() => {
               uploadBtn.textContent = 'upload sketch';
-              uploadBtn.style.background = '#2f6fed';
             }, 2000);
           } else {
             alert('Error loading sketch:\n' + result.error);
@@ -536,14 +615,14 @@ void loop() {
       const note = document.createElement('div');
       note.className = 'ins-api';
       note.innerHTML = `
-        <div class="ins-api-block ins-api-ok">
+        <div class="ins-api-block">
           <span class="ins-api-label">Supported</span>
           <code>pinMode</code>, <code>digitalWrite</code>, <code>digitalRead</code>,
           <code>analogRead</code>, <code>analogWrite</code>,
           <code>millis</code>, <code>micros</code>,
           <code>Serial.print</code> / <code>println</code>
         </div>
-        <div class="ins-api-block ins-api-no">
+        <div class="ins-api-block">
           <span class="ins-api-label">Not supported</span>
           <code>delay()</code>, <code>delayMicroseconds()</code> — use <code>millis()</code> instead
         </div>`;
@@ -556,7 +635,7 @@ void loop() {
       const serialBtn = document.createElement('button');
       const serialOpen = document.getElementById('serial-monitor').classList.contains('open');
       serialBtn.textContent = serialOpen ? 'Close Serial Monitor' : 'Open Serial Monitor';
-      serialBtn.style.cssText = 'width:100%;padding:8px;border:none;border-radius:6px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.65);cursor:pointer;font-weight:500;';
+      serialBtn.className = 'ins-text-btn';
       serialBtn.onclick = () => {
         const serialMonitor = document.getElementById('serial-monitor');
         const isOpen = serialMonitor.classList.contains('open');
@@ -576,12 +655,15 @@ void loop() {
     const actions = document.createElement('div');
     actions.className = 'ins-actions';
     const rb = document.createElement('button');
-    rb.textContent = 'rotate (r)';
+    rb.className = 'ins-text-btn ins-rotate';
+    rb.title = 'rotate (r)';
+    rb.setAttribute('aria-label', 'rotate');
+    rb.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg><span>rotate</span>`;
     rb.onclick = rotateSelected;
     actions.appendChild(rb);
     const db = document.createElement('button');
     db.textContent = 'delete';
-    db.className = 'danger';
+    db.className = 'ins-text-btn danger';
     db.onclick = removeSelected;
     actions.appendChild(db);
     inspector.appendChild(actions);
@@ -704,7 +786,7 @@ const MAG_RADIUS = 66;   // px of horizontal influence around the cursor
 let magPointerX = null;  // last cursor x while hovering the bar (null = away)
 
 function magItems() {
-  return [...wbSwatches.children, wbCustom];
+  return [...wbSwatches.querySelectorAll('.wb-sw, .wb-custom')];
 }
 function baseScaleOf(el) {
   if (!el.classList.contains('active')) return 1;
@@ -729,7 +811,7 @@ function updateMagnify() {
 
 function applyWireColor(color, fromCustom) {
   currentWireColor = color;
-  [...wbSwatches.children].forEach((sw) => sw.classList.toggle('active', !fromCustom && sw.dataset.color === color));
+  wbSwatches.querySelectorAll('.wb-sw').forEach((sw) => sw.classList.toggle('active', !fromCustom && sw.dataset.color === color));
   wbCustom.classList.toggle('active', !!fromCustom);
   updateMagnify();
   if (pendingWire) { pendingWire.color = color; }
@@ -742,7 +824,7 @@ function applyWireColor(color, fromCustom) {
   }
 }
 function buildWireBar() {
-  wbSwatches.innerHTML = '';
+  wbSwatches.querySelectorAll('.wb-sw').forEach((sw) => sw.remove());
   for (const [color, name] of WIRE_COLORS) {
     const sw = document.createElement('div');
     sw.className = 'wb-sw';
@@ -750,7 +832,7 @@ function buildWireBar() {
     sw.dataset.color = color;
     sw.title = name;
     sw.addEventListener('click', () => applyWireColor(color, false));
-    wbSwatches.appendChild(sw);
+    wbSwatches.insertBefore(sw, wbCustom);
   }
   wbColorInput.addEventListener('input', () => applyWireColor(wbColorInput.value, true));
   wirebar.addEventListener('pointermove', (e) => { magPointerX = e.clientX; updateMagnify(); });
@@ -1197,15 +1279,45 @@ document.getElementById('sch-close').addEventListener('click', () => {
 document.getElementById('build-bb').addEventListener('click', () => {
   const status = document.getElementById('bridge-status');
   if (!cjSim) hookCircuitJS();
-  if (!cjSim || typeof cjSim.exportCircuit !== 'function') {
+  if (!cjSim || typeof cjSim.getElements !== 'function') {
     status.textContent = 'simulator still loading \u2014 try again in a moment';
     return;
   }
   try {
-    status.textContent = importSchematic(cjSim.exportCircuit());
+    status.textContent = importFromSim(cjSim, {
+      addPart,
+      addWire,
+      clearBoard: () => document.getElementById('btn-clear').click(),
+    });
     fitView();
   } catch (err) {
     status.textContent = 'could not read the circuit';
+    console.error(err);
+  }
+});
+
+document.getElementById('build-sch').addEventListener('click', () => {
+  const status = document.getElementById('bridge-status');
+  if (!cjSim) hookCircuitJS();
+  if (!cjSim || typeof cjSim.importCircuit !== 'function') {
+    status.textContent = 'simulator still loading \u2014 try again in a moment';
+    return;
+  }
+  try {
+    const { text, message } = exportBreadboardToText(state);
+    if (!text) {
+      status.textContent = message;
+      return;
+    }
+    cjSim.importCircuit(text);
+    if (!schEl.classList.contains('open')) {
+      schEl.classList.add('open');
+      appEl.classList.add('schematic-open');
+      setTimeout(() => fitView(), 350);
+    }
+    status.textContent = message;
+  } catch (err) {
+    status.textContent = 'could not export schematic';
     console.error(err);
   }
 });
@@ -1220,11 +1332,10 @@ document.getElementById('import-circuit').addEventListener('change', async (e) =
     const text = await file.text();
     if (!cjSim) hookCircuitJS();
 
-    // Wait a bit for CircuitJS to be ready
     let attempts = 0;
     const tryLoad = () => {
-      if (cjSim && typeof cjSim.setCircuit === 'function') {
-        cjSim.setCircuit(text);
+      if (cjSim && typeof cjSim.importCircuit === 'function') {
+        cjSim.importCircuit(text);
         status.textContent = `loaded ${file.name}`;
         setTimeout(() => { status.textContent = ''; }, 3000);
       } else if (attempts < 20) {
@@ -1240,449 +1351,8 @@ document.getElementById('import-circuit').addEventListener('change', async (e) =
     console.error(err);
   }
 
-  // Reset file input so the same file can be loaded again
   e.target.value = '';
 });
-
-const RES_DEFS = CATALOG.filter((d) => d.sim && d.sim.type === 'resistor');
-function nearestResistorDef(ohms) {
-  let best = RES_DEFS[0], bd = Infinity;
-  for (const d of RES_DEFS) {
-    const diff = Math.abs(Math.log(d.props.ohms) - Math.log(ohms || 1000));
-    if (diff < bd) { bd = diff; best = d; }
-  }
-  return best;
-}
-
-// nearest hole on a power rail to a given column (rails run in groups of 5)
-function railHoleNear(rail, col) {
-  let best = 0, bd = Infinity;
-  for (let i = 0; i < 50; i++) {
-    const rc = 2 + i + Math.floor(i / 5);
-    const d = Math.abs(rc - col);
-    if (d < bd) { bd = d; best = i; }
-  }
-  return `${rail}${best}`;
-}
-const NET_COLORS = ['#3fa54a', '#2f6fed', '#e07b39', '#8e44ad', '#16a085', '#e8b53a'];
-const UNSUP_NAMES = {
-  c: 'capacitor', l: 'inductor', d: 'diode', t: 'transistor', f: 'MOSFET',
-  a: 'op-amp', L: 'logic input', M: 'logic output', T: 'transformer',
-  x: 'scope/probe', as: 'analog switch', I: 'current source',
-};
-
-// CircuitJS gate type codes (text format)
-const GATE_CODES = {
-  '150': 'inverter',  // NOT gate
-  '151': 'and',        // AND gate
-  '152': 'or',         // OR gate
-  '153': 'nand',       // NAND gate
-  '154': 'nor',        // NOR gate
-  '155': 'xor',        // XOR gate
-};
-
-// Map gate types to IC definitions
-const GATE_TO_IC = {
-  inverter: { id: 'hc14', gatesPerChip: 6, inputs: 1 },
-  and: { id: 'hc08', gatesPerChip: 4, inputs: 2 },
-  or: { id: 'hc32', gatesPerChip: 4, inputs: 2 },
-  nand: { id: 'hc00', gatesPerChip: 4, inputs: 2 },
-  nor: { id: 'hc02', gatesPerChip: 4, inputs: 2 },
-  xor: { id: 'hc86', gatesPerChip: 4, inputs: 2 },
-  dff: { id: 'cd4013', gatesPerChip: 2, inputs: 2 },  // D flip-flop (CLK, D)
-};
-
-// Translate a CircuitJS circuit into a clean breadboard. Supported parts:
-// resistor, LED, switch, voltage source, ground, wire. If the circuit contains
-// any other part we refuse (rather than silently dropping it and producing a
-// broken board). Layout: components in a tidy row (pins in row b), power/ground
-// taps run to the nearest rail, and each internal net is chained with short
-// colour-coded jumpers.
-function importSchematic(text) {
-  if (!text || !text.trim()) return 'draw a circuit in the simulator first';
-
-  // union-find over element coordinates (shared coords / wires => one net)
-  const parent = new Map();
-  const add = (a) => { if (!parent.has(a)) parent.set(a, a); };
-  const find = (a) => { let r = a; while (parent.get(r) !== r) r = parent.get(r); let n = a; while (parent.get(n) !== r) { const nx = parent.get(n); parent.set(n, r); n = nx; } return r; };
-  const uni = (a, b) => { add(a); add(b); const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
-  const K = (x, y) => x + ',' + y;
-
-  // Accepts either CircuitJS's newer XML export or the legacy text netlist.
-  const elems = [];
-  const gates = [];
-  const unsupported = new Set();
-  const pushEl = (type, x1, y1, x2, y2, ohms) => {
-    if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) return;
-    const a = K(x1, y1), b = K(x2, y2);
-    add(a); add(b);
-    if (type === 'w' || type === 'g') uni(a, b);
-    elems.push({ type, a, b, ohms });
-  };
-  const pushGate = (gateType, x1, y1, x2, y2) => {
-    if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) return;
-    // For gates: in1 at (x1,y1), in2 at (x2,y2) for 2-input gates
-    // Output is computed based on gate position
-    const in1 = K(x1, y1), in2 = K(x2, y2);
-    add(in1); add(in2);
-    // Approximate output position (CircuitJS puts it on the right side of the gate)
-    const outX = Math.max(x1, x2) + 16, outY = (y1 + y2) / 2;
-    const out = K(outX, outY);
-    add(out);
-    gates.push({ gateType, inputs: [in1, in2], output: out });
-  };
-
-  if (text.trim().startsWith('<')) {
-    // XML: <cir> with <r/>, <LED/>, <s/>, <w/>, <g/>, <v/> children (x="x1 y1 x2 y2")
-    const TAG = {
-      r: 'r', R: 'r',  // resistor (both cases)
-      LED: 'led',
-      s: 's', S: 's',  // switch (both cases)
-      w: 'w', g: 'g', v: 'v'
-    };
-    const GATE_TAG = {
-      InvertingGate: 'inverter',
-      Inverter: 'inverter',
-      AndGate: 'and',
-      And: 'and',
-      OrGate: 'or',
-      Or: 'or',
-      NandGate: 'nand',
-      Nand: 'nand',
-      NorGate: 'nor',
-      Nor: 'nor',
-      XorGate: 'xor',
-      Xor: 'xor'
-    };
-    const FLIPFLOP_TAG = {
-      DFlipFlop: 'dff',
-      DFF: 'dff'
-    };
-    const SKIP_XML = new Set(['x', 'ScopeElm', 'as', 'AnalogSwitch', 'AnalogSwitchElm', 'o', 'h', '%', 'B', '38']);
-    const doc = new DOMParser().parseFromString(text, 'text/xml');
-    for (const el of doc.querySelectorAll('*')) {
-      const tag = el.tagName;
-      if (tag === 'cir' || tag === 'parsererror') continue;
-
-      // Skip visualization/UI elements
-      if (SKIP_XML.has(tag)) continue;
-
-      const c = (el.getAttribute('x') || '').trim().split(/\s+/).map(Number);
-
-      // Check if it's a logic gate
-      if (tag in GATE_TAG) {
-        if (c.length >= 4) pushGate(GATE_TAG[tag], c[0], c[1], c[2], c[3]);
-        continue;
-      }
-
-      // Check if it's a flip-flop (D flip-flop)
-      if (tag in FLIPFLOP_TAG) {
-        if (c.length >= 4) pushGate('dff', c[0], c[1], c[2], c[3]);  // treat as gate for now
-        continue;
-      }
-
-      const type = TAG[tag];
-      if (!type) { if (c.length >= 4) unsupported.add(UNSUP_NAMES[tag] || tag); continue; }
-      pushEl(type, c[0], c[1], c[2], c[3], parseFloat(el.getAttribute('r')));
-    }
-  } else {
-    const SUP = new Set(['w', 'r', 'g', 'R', 'v', '162', 's', 'S']);
-    const GATE_SET = new Set(Object.keys(GATE_CODES));
-    const DFF_CODES = new Set(['159']);  // D flip-flop code in text format
-    const SKIP = new Set(['$', 'o', 'h', '%', 'B', '38', 'x', 'as']);  // visualization/UI elements to skip
-    for (const raw of text.split(/\r?\n/)) {
-      const ln = raw.trim();
-      if (!ln) continue;
-      const tk = ln.split(/\s+/);
-      const t0 = tk[0];
-      if (SKIP.has(t0)) continue;
-
-      // Check if it's a logic gate
-      if (GATE_SET.has(t0)) {
-        const gateType = GATE_CODES[t0];
-        pushGate(gateType, +tk[1], +tk[2], +tk[3], +tk[4]);
-        continue;
-      }
-
-      // Check if it's a D flip-flop
-      if (DFF_CODES.has(t0)) {
-        pushGate('dff', +tk[1], +tk[2], +tk[3], +tk[4]);
-        continue;
-      }
-
-      if (!SUP.has(t0)) { unsupported.add(UNSUP_NAMES[t0] || t0); continue; }
-      const type = t0 === '162' ? 'led' : (t0 === 'R' ? 'r' : (t0 === 'S' ? 's' : t0));
-      pushEl(type, +tk[1], +tk[2], +tk[3], +tk[4], type === 'r' ? parseFloat(tk[6]) : NaN);
-    }
-  }
-
-  // refuse rather than build a broken board from a partial circuit
-  if (unsupported.size) {
-    return `can't build \u2014 unsupported part(s): ${[...unsupported].join(', ')}. supported: resistor, LED, switch, logic gates, D flip-flops, power, ground.`;
-  }
-  const hasPassive = elems.some((e) => e.type === 'r' || e.type === 'led' || e.type === 's');
-  const hasGates = gates.length > 0;
-  if (!hasPassive && !hasGates) {
-    return 'nothing to build \u2014 add a resistor, LED, switch, or logic gate';
-  }
-
-  // Allocate gates to physical IC chips (pack multiple gates per chip)
-  const chipInstances = [];  // array of {type, icDef, gates: [gates]}
-  const gateToChip = new Map();  // gate -> {chip, slot}
-
-  for (const gate of gates) {
-    const icInfo = GATE_TO_IC[gate.gateType];
-    if (!icInfo) continue;  // skip unknown gate types
-
-    // Find existing chip of same type with free slot
-    let chip = chipInstances.find(c =>
-      c.type === gate.gateType &&
-      c.gates.length < icInfo.gatesPerChip
-    );
-
-    // If no chip available, create new one
-    if (!chip) {
-      chip = {
-        type: gate.gateType,
-        icDef: DEF_BY_ID.get(icInfo.id),
-        gates: [],
-      };
-      chipInstances.push(chip);
-    }
-
-    // Assign gate to this chip
-    const slot = chip.gates.length;
-    chip.gates.push(gate);
-    gateToChip.set(gate, { chip, slot });
-  }
-
-  document.getElementById('btn-clear').click();   // OK to build: clean the board
-
-  // classify nets (voltage source defines + / -)
-  const ground = new Set(), plus = new Set();
-  for (const e of elems) {
-    if (e.type === 'g') ground.add(find(e.a));
-    if (e.type === 'v') { plus.add(find(e.b)); ground.add(find(e.a)); }
-  }
-  const isGroundR = (root) => ground.has(root);
-  const isPlusR = (root) => plus.has(root) && !ground.has(root);
-
-  // Convention-following layout: series-connected parts share the breadboard
-  // column of the node between them (so no jumper is needed there); power and
-  // ground tap the nearest rail (red / black); only genuine branches get a
-  // coloured jumper. Consecutive parts alternate rows b/c so a shared column
-  // holds both their legs in different holes.
-  const netHome = new Map();      // internal net root -> {col, top}
-  const powerPlus = [], powerMinus = [], jumpers = [];
-  const registerNet = (root, col, top) => {
-    if (isGroundR(root)) { powerMinus.push({ col, top }); return; }
-    if (isPlusR(root)) { powerPlus.push({ col, top }); return; }
-    if (netHome.has(root)) {
-      const h = netHome.get(root);
-      if (h.col !== col || h.top !== top) jumpers.push({ a: h, b: { col, top } });
-    } else netHome.set(root, { col, top });
-  };
-
-  const ROWS = ['b', 'c'];
-  let col = 3, rowIdx = 0, prevRightNet = null, prevRightCol = null;
-  const placed = { r: 0, led: 0, sw: 0 };
-
-  for (const e of elems) {
-    if (e.type === 'r' || e.type === 'led') {
-      const netA = find(e.a), netB = find(e.b);
-      const span = e.type === 'r' ? 3 : 1;
-      const symmetric = e.type === 'r';   // resistors have no polarity; LEDs do
-      // continue the series chain by re-using the previous part's right column
-      let shareLeft = false, swapAB = false;
-      if (prevRightNet !== null) {
-        if (netA === prevRightNet) shareLeft = true;
-        else if (symmetric && netB === prevRightNet) { shareLeft = true; swapAB = true; }
-      }
-      const leftCol = shareLeft ? prevRightCol : col;
-      const rightCol = leftCol + span;
-      const row = ROWS[rowIdx % ROWS.length];
-      const aCol = swapAB ? rightCol : leftCol;   // pin a (e.a) column
-      const bCol = swapAB ? leftCol : rightCol;   // pin b (e.b) column
-      const def = e.type === 'r' ? nearestResistorDef(e.ohms || 1000) : DEF_BY_ID.get('led');
-      const opts = { holes: [`${aCol}${row}`, `${bCol}${row}`], rot: 0 };
-      if (e.type === 'r') opts.props = { ohms: e.ohms || 1000 };
-      addPart(def, opts);
-      registerNet(netA, aCol, true);
-      registerNet(netB, bCol, true);
-      prevRightNet = swapAB ? netA : netB;
-      prevRightCol = rightCol;
-      col = Math.max(col, rightCol) + 1;
-      rowIdx++;
-      placed[e.type === 'r' ? 'r' : 'led']++;
-    } else if (e.type === 's') {
-      const c0 = col;
-      addPart(DEF_BY_ID.get('button'), { holes: [`${c0}e`, `${c0 + 2}e`, `${c0}f`, `${c0 + 2}f`], rot: 0 });
-      const netA = find(e.a), netB = find(e.b);
-
-      // Standard convention: one side of switch should be grounded if either net is ground
-      if (isGroundR(netA)) {
-        // Net A is ground - connect left terminals to ground
-        registerNet(netA, c0, true);      // top-left
-        registerNet(netA, c0, false);     // bottom-left
-        registerNet(netB, c0 + 2, true);  // top-right (signal)
-      } else if (isGroundR(netB)) {
-        // Net B is ground - connect right terminals to ground
-        registerNet(netA, c0, true);      // top-left (signal)
-        registerNet(netB, c0 + 2, true);  // top-right to ground
-        registerNet(netB, c0 + 2, false); // bottom-right to ground
-      } else {
-        // Neither is ground - wire as before
-        registerNet(netA, c0, true);
-        registerNet(netB, c0, false);
-      }
-
-      col = c0 + 4; prevRightNet = null; prevRightCol = null;
-      placed.sw++;
-    }
-  }
-
-  // Place IC chips for logic gates (after passive components)
-  const icPlacements = [];  // track {chip, inst, col} for each IC
-  const icPower = [];  // track IC power connections separately (different row conventions)
-
-  for (const chip of chipInstances) {
-    // Place IC straddling the center ravine (standard DIP placement)
-    // 14-pin DIP: pins 1-7 on row e (bottom of top section), pins 8-14 on row f (top of bottom section)
-    // Pins are numbered counter-clockwise: 1-7 down left side, 8-14 up right side
-    const icCol = col;
-    const holes = [
-      // Left side pins 1-7 (row e - bottom of top section)
-      `${icCol}e`, `${icCol + 1}e`, `${icCol + 2}e`, `${icCol + 3}e`,
-      `${icCol + 4}e`, `${icCol + 5}e`, `${icCol + 6}e`,
-      // Right side pins 8-14 (row f - top of bottom section)
-      `${icCol + 6}f`, `${icCol + 5}f`, `${icCol + 4}f`, `${icCol + 3}f`,
-      `${icCol + 2}f`, `${icCol + 1}f`, `${icCol}f`
-    ];
-    const icInst = addPart(chip.icDef, { holes, rot: 0 });
-    icPlacements.push({ chip, inst: icInst, col: icCol });
-
-    // Power connections for ICs (use adjacent rows to avoid conflict with IC pins)
-    // Pin 14 (VCC) is at col, row f → wire goes to col, row g (adjacent)
-    // Pin 7 (GND) is at col+6, row e → wire goes to col+6, row d (adjacent)
-    icPower.push(
-      { type: 'vcc', col: icCol, hole: `${icCol}g` },
-      { type: 'gnd', col: icCol + 6, hole: `${icCol + 6}d` }
-    );
-
-    col += 8;  // 7 columns for IC + 1 gap
-  }
-
-  // Map gate slot to pin indices for each IC type
-  const getGatePins = (gateType, slot) => {
-    if (gateType === 'inverter') {
-      // 74HC14N: 6 inverters
-      const pinMap = [
-        { input: [0], output: 1 },   // gate 0: pins 1→2
-        { input: [2], output: 3 },   // gate 1: pins 3→4
-        { input: [4], output: 5 },   // gate 2: pins 5→6
-        { input: [8], output: 7 },   // gate 3: pins 9→8
-        { input: [10], output: 9 },  // gate 4: pins 11→10
-        { input: [12], output: 11 }, // gate 5: pins 13→12
-      ];
-      return pinMap[slot];
-    } else if (gateType === 'dff') {
-      // CD4013: 2 D flip-flops (CLK, D inputs → Q output)
-      const pinMap = [
-        { input: [2, 4], output: 0 },   // FF1: CLK=pin3, D=pin5 → Q=pin1
-        { input: [10, 8], output: 12 }, // FF2: CLK=pin11, D=pin9 → Q=pin13
-      ];
-      return pinMap[slot];
-    } else {
-      // 74HC08/32/00/02/86: 4 two-input gates
-      const pinMap = [
-        { input: [0, 1], output: 2 },  // gate 0: pins 1,2→3
-        { input: [3, 4], output: 5 },  // gate 1: pins 4,5→6
-        { input: [8, 9], output: 7 },  // gate 2: pins 9,10→8
-        { input: [11, 12], output: 10 }, // gate 3: pins 12,13→11
-      ];
-      return pinMap[slot];
-    }
-  };
-
-  // Wire gate signals to IC pins
-  // Wires connect to adjacent rows in same column as IC pins (breadboard columns are connected)
-  // IC pins are in rows 'e' (top section) and 'f' (bottom section)
-  // Wires go to rows 'd' (for top section pins) and 'g' (for bottom section pins)
-  for (const gate of gates) {
-    const mapping = gateToChip.get(gate);
-    if (!mapping) continue;
-    const { chip, slot } = mapping;
-    const placement = icPlacements.find(p => p.chip === chip);
-    if (!placement) continue;
-
-    const pins = getGatePins(chip.type, slot);
-    const icInst = placement.inst;
-
-    // Wire inputs
-    for (let i = 0; i < gate.inputs.length; i++) {
-      const inputNet = find(gate.inputs[i]);
-      const pinIdx = pins.input[i];
-      const inputHole = icInst.holes[pinIdx];
-      const holeCol = parseInt(inputHole.match(/\d+/)[0]);
-      // IC pins in row 'e' use wire row 'd', pins in row 'f' use wire row 'g'
-      const isTop = inputHole.endsWith('e');
-      registerNet(inputNet, holeCol, isTop);
-    }
-
-    // Wire output
-    const outputNet = find(gate.output);
-    const outputPinIdx = pins.output;
-    const outputHole = icInst.holes[outputPinIdx];
-    const holeCol = parseInt(outputHole.match(/\d+/)[0]);
-    const isTop = outputHole.endsWith('e');
-    registerNet(outputNet, holeCol, isTop);
-  }
-
-  // battery beside the board: + to the TOP rail, - to the BOTTOM rail
-  const supply = addPart(DEF_BY_ID.get('pow5'), { x: BODY.x - 78, y: BODY.y + BODY.h * 0.5 });
-  addWire({ port: [supply.uid, 'pos'] }, { hole: railHoleNear('T+', 3) }, '#d43c3c', 'wire');
-  addWire({ port: [supply.uid, 'neg'] }, { hole: railHoleNear('B-', 3) }, '#26262a', 'wire');
-
-  // power (+) always runs to the top rail, ground (-) to the bottom rail
-  // (opposite sides). Taps use a spare row in the pin's own column.
-  const plusTap = (o) => `${o.col}${o.top ? 'a' : 'f'}`;
-  const minusTap = (o) => `${o.col}${o.top ? 'e' : 'j'}`;
-  const jumpTap = (o) => `${o.col}${o.top ? 'd' : 'g'}`;
-  for (const t of powerPlus) addWire({ hole: plusTap(t) }, { hole: railHoleNear('T+', t.col) }, '#d43c3c', 'wire');
-  for (const t of powerMinus) addWire({ hole: minusTap(t) }, { hole: railHoleNear('B-', t.col) }, '#26262a', 'wire');
-
-  // IC power connections (use explicit holes in adjacent rows to IC pins)
-  for (const pwr of icPower) {
-    if (pwr.type === 'vcc') {
-      addWire({ hole: pwr.hole }, { hole: railHoleNear('T+', pwr.col) }, '#d43c3c', 'wire');
-    } else {
-      addWire({ hole: pwr.hole }, { hole: railHoleNear('B-', pwr.col) }, '#26262a', 'wire');
-    }
-  }
-
-  let ci = 0;
-  for (const j of jumpers) {
-    addWire({ hole: jumpTap(j.a) }, { hole: jumpTap(j.b) }, NET_COLORS[ci++ % NET_COLORS.length], 'wire');
-  }
-
-  // Build success message with part counts
-  const parts = [];
-  if (placed.r) parts.push(`${placed.r} resistor${placed.r > 1 ? 's' : ''}`);
-  if (placed.led) parts.push(`${placed.led} LED${placed.led > 1 ? 's' : ''}`);
-  if (placed.sw) parts.push(`${placed.sw} switch${placed.sw > 1 ? 'es' : ''}`);
-  if (chipInstances.length) {
-    // Group ICs by type for nicer message
-    const icCounts = {};
-    for (const chip of chipInstances) {
-      const name = chip.icDef.id.toUpperCase();
-      icCounts[name] = (icCounts[name] || 0) + 1;
-    }
-    for (const [name, count] of Object.entries(icCounts)) {
-      parts.push(`${count} ${name}`);
-    }
-  }
-  return `built ${parts.join(', ')}`;
-}
 
 // ---------------------------------------------------------------- sim + dynamic render loop
 let lastT = 0;
@@ -1707,8 +1377,14 @@ function frame(ts) {
       if (dyn.imageEl) dyn.imageEl.style.filter = dyn.base + (b > 0.05 ? ` brightness(${(1 + b * 0.6).toFixed(2)})` : '');
       if (dyn.body) dyn.body.setAttribute('fill', b > 0.04 ? dyn.colorFill[inst.props.color] : dyn.colorDim[inst.props.color]);
     } else if (type === 'button' && dyn) {
-      dyn.cap.setAttribute('r', rt.pressed ? 7.4 : 8.4);
-      dyn.cap.setAttribute('fill', rt.pressed ? '#9ea3ab' : 'url(#metalG)');
+      if (dyn.body) {
+        const dy = rt.pressed ? 1.5 : 0;
+        dyn.body.setAttribute('transform', `translate(0,${dy})`);
+        dyn.body.style.filter = rt.pressed ? 'brightness(0.88)' : '';
+      } else if (dyn.cap) {
+        dyn.cap.setAttribute('r', rt.pressed ? 7.2 : 8.2);
+        dyn.cap.setAttribute('fill', rt.pressed ? '#9a9ea4' : '#b6bac0');
+      }
     } else if (type === 'spst' && dyn) {
       dyn.knob.setAttribute('x', inst.props.closed ? dyn.onX : dyn.offX);
     } else if (type === 'spdt' && dyn) {

@@ -1,9 +1,10 @@
-// Breadboard geometry + art. A standard full-size (830-point) board:
-// 63 numbered columns, rows a-e / f-j split by the center ravine, and two
-// power-rail pairs (magenta + / blue -) top and bottom, per the reference photo.
+// Breadboard geometry + art. A full-size board with room for lab builds:
+// numbered columns, rows a-e / f-j split by the center ravine, and two
+// power-rail pairs (magenta + / blue -) top and bottom.
 
 export const P = 16;                 // 0.1" hole pitch, in px
-export const COLS = 63;
+export const COLS = 84;              // wider than a physical 63-col strip so auto-builds fit
+export const RAIL_COUNT = 70;        // rail taps spanning the board
 
 // y positions (in pitch units) of every hole row
 const ROW_Y = {
@@ -14,12 +15,12 @@ const ROW_Y = {
 };
 export const MAIN_ROWS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
 
-export const BODY = { x: -3 * P, y: 0, w: 68 * P, h: 19.9 * P };
+export const BODY = { x: -3 * P, y: 0, w: (COLS + 5) * P, h: 19.9 * P };
 
 export const colX = (c) => (c - 1) * P;            // columns are 1-based
 export const rowY = (r) => ROW_Y[r] * P;
 
-// rail hole i (0..49) sits at column slot 2 + i + floor(i/5) -> groups of 5
+// rail hole i sits at column slot 2 + i + floor(i/5) -> groups of 5
 const railCol = (i) => 2 + i + Math.floor(i / 5);
 
 // ---- hole table -------------------------------------------------------------
@@ -38,7 +39,7 @@ for (let c = 1; c <= COLS; c++) {
   }
 }
 for (const rail of ['T+', 'T-', 'B+', 'B-']) {
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < RAIL_COUNT; i++) {
     const h = {
       id: `${rail}${i}`,
       x: colX(railCol(i)), y: rowY(rail),
@@ -105,7 +106,7 @@ export function buildBoard(g) {
 
   // rail stripes: magenta above the + row, blue below the - row
   const stripe = (y, color) => E('line', {
-    x1: colX(1), y1: y, x2: colX(63), y2: y,
+    x1: colX(1), y1: y, x2: colX(COLS), y2: y,
     stroke: color, 'stroke-width': 2.2, 'stroke-linecap': 'round', opacity: 0.85,
   }, g);
   stripe(rowY('T+') - 0.62 * P, '#e0218a');
@@ -120,12 +121,12 @@ export function buildBoard(g) {
   }, g);
   for (const [row, s, color] of [['T+', '+', '#e0218a'], ['T-', '\u2212', '#2f7bd9'], ['B+', '+', '#e0218a'], ['B-', '\u2212', '#2f7bd9']]) {
     railLabel(colX(1) - 1.6 * P, rowY(row), s, color);
-    railLabel(colX(63) + 1.6 * P, rowY(row), s, color);
+    railLabel(colX(COLS) + 1.6 * P, rowY(row), s, color);
   }
 
   // row letters on both sides of each block
   for (const r of MAIN_ROWS) {
-    for (const x of [colX(1) - 1.55 * P, colX(63) + 1.55 * P]) {
+    for (const x of [colX(1) - 1.55 * P, colX(COLS) + 1.55 * P]) {
       E('text', {
         x, y: rowY(r) + 3.2, text: r, fill: 'rgba(0,0,0,0.42)',
         'font-size': 8.5, 'text-anchor': 'middle', 'font-family': 'Inter, sans-serif',
@@ -133,8 +134,11 @@ export function buildBoard(g) {
     }
   }
 
-  // column numbers above row a and below row j (1, 5, 10, ... 60)
-  const numbered = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
+  // column numbers above row a and below row j
+  const numbered = [];
+  for (let c = 1; c <= COLS; c++) {
+    if (c === 1 || c % 5 === 0) numbered.push(c);
+  }
   for (const c of numbered) {
     for (const y of [rowY('a') - 0.72 * P, rowY('j') + 1.05 * P]) {
       E('text', {

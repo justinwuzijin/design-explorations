@@ -3,7 +3,7 @@
 :root {
   --bg: #f6f5f2;
   --fg: #111;
-  --muted: #8a877f;
+  --muted: #b0ada6;
   --rule: #e3e1db;
   --accent: #2f6fed;
   --serial-h: 280px;
@@ -34,39 +34,40 @@ body {
 }
 .tb-left { display: flex; align-items: center; gap: 18px; min-width: 0; }
 #back {
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(0, 0, 0, 0.34);
   font-size: 0.73rem;
+  font-weight: 400;
   text-decoration: none;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   transition: color 0.18s;
   flex-shrink: 0;
 }
-#back:hover { color: rgba(0, 0, 0, 0.85); }
+#back:hover { color: rgba(0, 0, 0, 0.65); }
 #projname {
   border: none;
   background: transparent;
-  font: 500 0.82rem 'Inter', sans-serif;
-  letter-spacing: -0.01em;
+  font: 400 0.82rem 'Inter', sans-serif;
+  letter-spacing: 0;
   color: var(--fg);
   width: 220px;
   padding: 4px 6px;
   border-radius: 6px;
 }
-#projname:hover { background: rgba(0, 0, 0, 0.04); }
-#projname:focus { outline: none; background: rgba(0, 0, 0, 0.05); }
+#projname:hover { background: rgba(0, 0, 0, 0.03); }
+#projname:focus { outline: none; background: rgba(0, 0, 0, 0.04); }
 .tb-right { display: flex; gap: 6px; }
 .tb-right button {
   border: none;
   cursor: pointer;
-  font: 500 0.7rem 'Inter', sans-serif;
-  letter-spacing: 0.04em;
-  color: rgba(0, 0, 0, 0.55);
-  background: rgba(0, 0, 0, 0.045);
-  padding: 6px 12px;
-  border-radius: 8px;
-  transition: background 0.15s, color 0.15s;
+  font: 400 0.7rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  color: rgba(0, 0, 0, 0.4);
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: color 0.15s;
 }
-.tb-right button:hover { background: rgba(0, 0, 0, 0.1); color: #000; }
+.tb-right button:hover { background: transparent; color: #000; }
 /* ---- layout ------------------------------------------------------------- */
 #app { flex: 1; display: flex; min-height: 0; overflow: hidden; position: relative; }
 
@@ -169,18 +170,20 @@ body {
   bottom: 0;
   transform: translate(-50%, 70%);   /* hang the tag below the item */
   font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0;
   line-height: 1.2;
   text-align: center;
-  color: rgba(0, 0, 0, 0.72);
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 5px;
-  padding: 2px 6px;
+  color: rgba(0, 0, 0, 0.4);
+  background: transparent;
+  border-radius: 0;
+  padding: 2px 0;
   width: max-content;
   max-width: 96%;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  box-shadow: none;
   z-index: 6;
 }
 .cell:hover .tip { opacity: 1; }
@@ -191,11 +194,12 @@ body {
   position: relative;
   min-width: 0;
   background: var(--bg);
-  transition: margin-right 0.3s ease;
+  transition: flex 0.3s ease, max-width 0.3s ease, margin-bottom 0.3s ease;
 }
-/* squeeze stage left when schematic panel is open - canvas at 50% */
+/* squeeze stage when schematic panel is open — keep canvas in the left half */
 #app.schematic-open #stage {
-  margin-right: 50%;
+  flex: 0 0 50%;
+  max-width: 50%;
 }
 
 /* ---- canvas tools (top-right corner of the stage) ----------------------- */
@@ -205,32 +209,23 @@ body {
   top: 14px;
   z-index: 12;
   display: flex;
-  gap: 6px;
+  gap: 14px;
 }
 #canvas-tools button {
   border: none;
   cursor: pointer;
-  font: 500 0.62rem 'Inter', sans-serif;
-  letter-spacing: 0.04em;
-  color: var(--fg);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 5px 10px;
-  border-radius: 6px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-  transition: background 0.15s, color 0.15s;
-}
-#canvas-tools button:hover { background: #fff; color: #000; }
-/* clear = compact square icon button (reset arrow) */
-#canvas-tools #btn-clear {
-  width: 23px;
-  height: 23px;
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  color: rgba(0, 0, 0, 0.48);
+  background: transparent;
   padding: 0;
-  display: grid;
-  place-items: center;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: color 0.15s;
 }
-#canvas-tools #btn-clear svg { display: block; width: 13px; height: 13px; }
+#canvas-tools button:hover { background: transparent; color: rgba(0, 0, 0, 0.75); }
 
 /* ---- zoom controls (bottom-left corner of the stage) ------------------- */
 #zoom-controls {
@@ -240,38 +235,38 @@ body {
   z-index: 12;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 #zoom-controls button {
-  width: 25px;
-  height: 25px;
-  display: grid;
-  place-items: center;
+  width: auto;
+  height: auto;
+  display: inline;
   border: none;
   cursor: pointer;
-  font: 500 0.9rem 'Inter', sans-serif;
+  font: 400 1rem 'Inter', sans-serif;
   line-height: 1;
-  color: rgba(0, 0, 0, 0.6);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-  transition: background 0.15s, color 0.15s;
+  color: rgba(0, 0, 0, 0.48);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 2px;
+  transition: color 0.15s;
 }
-#zoom-controls button:hover { background: #fff; color: #000; }
+#zoom-controls button:hover { background: transparent; color: rgba(0, 0, 0, 0.75); }
 #zoom-pct {
-  min-width: 40px;
+  min-width: 0;
   text-align: center;
-  font: 500 0.64rem 'Inter', sans-serif;
-  letter-spacing: 0.03em;
-  color: rgba(0, 0, 0, 0.6);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 8px;
-  padding: 6px 7px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  font: 400 0.8rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  color: rgba(0, 0, 0, 0.48);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
   user-select: none;
 }
 
@@ -282,9 +277,9 @@ body {
   bottom: 14px;
   transform: translateX(-50%);
   z-index: 12;
-  font: 400 0.58rem 'Inter', sans-serif;
-  color: rgba(0, 0, 0, 0.35);
-  letter-spacing: 0.02em;
+  font: 400 0.72rem 'Inter', sans-serif;
+  color: rgba(0, 0, 0, 0.28);
+  letter-spacing: 0;
   pointer-events: none;
   user-select: none;
 }
@@ -312,15 +307,21 @@ body {
   z-index: 12;
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 999px;
-  padding: 7px 16px;
+  gap: 0;
+  background: transparent;
+  padding: 0;
   user-select: none;
 }
-.wb-swatches { display: flex; align-items: center; gap: 9px; }
+.wb-swatches {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
 .wb-sw {
   width: 18px;
   height: 18px;
@@ -365,8 +366,9 @@ body {
   left: 16px;
   bottom: 14px;
   font-size: 0.68rem;
-  color: rgba(0, 0, 0, 0.42);
-  letter-spacing: 0.02em;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.36);
+  letter-spacing: 0;
   pointer-events: none;
   max-width: 60%;
 }
@@ -381,21 +383,21 @@ body {
   max-width: 240px;
   max-height: calc(100% - 72px);
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 14px;
-  padding: 13px 14px 12px;
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.13);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
   z-index: 20;
 }
 #inspector h3 {
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: lowercase;
-  color: rgba(0, 0, 0, 0.45);
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(0, 0, 0, 0.4);
   margin-bottom: 10px;
 }
 .ins-row {
@@ -405,67 +407,73 @@ body {
   gap: 10px;
   margin-bottom: 8px;
 }
-.ins-row label { font-size: 0.7rem; color: rgba(0, 0, 0, 0.55); }
+.ins-row label { font-size: 0.7rem; font-weight: 400; color: rgba(0, 0, 0, 0.45); }
 .ins-row select, .ins-row input[type="number"] {
-  font: 500 0.72rem 'Inter', sans-serif;
+  font: 400 0.72rem 'Inter', sans-serif;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 4px 6px;
   background: #fff;
   width: 96px;
 }
 .ins-row input[type="range"] { width: 110px; }
-.ins-actions { display: flex; gap: 6px; margin-top: 10px; }
+.ins-actions { display: flex; gap: 14px; margin-top: 10px; align-items: center; }
+.ins-text-btn,
 .ins-actions button {
-  flex: 1;
+  flex: 0 0 auto;
   border: none;
   cursor: pointer;
-  font: 500 0.68rem 'Inter', sans-serif;
-  padding: 6px 0;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.65);
-  transition: background 0.15s, color 0.15s;
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.5);
+  transition: color 0.15s;
 }
-.ins-actions button:hover { background: rgba(0, 0, 0, 0.12); color: #000; }
-.ins-actions button.danger:hover { background: #fbe4e4; color: #b23c3c; }
-.ins-note { font-size: 0.64rem; color: rgba(0, 0, 0, 0.4); line-height: 1.45; }
+.ins-text-btn:hover,
+.ins-actions button:hover { background: transparent; color: rgba(0, 0, 0, 0.8); }
+.ins-actions button.danger:hover,
+.ins-text-btn.danger:hover { background: transparent; color: #b23c3c; }
+.ins-rotate {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ins-rotate svg { display: block; opacity: 0.7; }
+.ins-note { font-size: 0.64rem; font-weight: 400; color: rgba(0, 0, 0, 0.32); line-height: 1.45; }
 
 .ins-api {
   margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .ins-api-block {
-  border-radius: 8px;
-  padding: 7px 8px 6px;
+  border-radius: 0;
+  padding: 0;
   font-size: 0.62rem;
-  line-height: 1.4;
+  font-weight: 400;
+  line-height: 1.45;
+  background: transparent;
+  border: none;
+  color: rgba(0, 0, 0, 0.45);
 }
 .ins-api-block .ins-api-label {
   display: block;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 0.58rem;
-  margin-bottom: 3px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 0.62rem;
+  margin-bottom: 2px;
+  color: rgba(0, 0, 0, 0.35);
 }
-.ins-api-ok {
-  background: rgba(46, 160, 90, 0.12);
-  color: #1f6b3a;
-  border: 1px solid rgba(46, 160, 90, 0.22);
-}
-.ins-api-ok .ins-api-label { color: #18753a; }
-.ins-api-no {
-  background: rgba(196, 80, 60, 0.1);
-  color: #8a3a2a;
-  border: 1px solid rgba(196, 80, 60, 0.2);
-}
-.ins-api-no .ins-api-label { color: #a94432; }
 .ins-api-block code {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 0.6rem;
+  font-weight: 400;
+  background: transparent;
+  padding: 0;
 }
 
 /* ---- CircuitJS schematic drawer ----------------------------------------- */
@@ -488,13 +496,19 @@ body {
 .sch-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px; border-bottom: 1px solid var(--rule);
-  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.03em;
+  font-size: 0.72rem; font-weight: 400; letter-spacing: 0;
+  color: rgba(0, 0, 0, 0.45);
 }
 #sch-close {
-  border: none; background: rgba(0, 0, 0, 0.05); cursor: pointer;
-  border-radius: 6px; padding: 4px 9px; font-size: 0.78rem; color: rgba(0,0,0,0.55);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.35);
+  font-weight: 400;
+  padding: 4px 6px;
+  font-size: 0.78rem;
 }
-#sch-close:hover { background: rgba(0, 0, 0, 0.12); color: #000; }
+#sch-close:hover { color: #000; }
 #sch-frame { flex: 1; border: none; width: 100%; background: #000; }
 .sch-import {
   border-top: 1px solid var(--rule);
@@ -514,22 +528,28 @@ body {
 .import-file-btn {
   display: inline-block;
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.65);
-  font: 500 0.72rem 'Inter', sans-serif;
-  padding: 8px 14px;
-  border-radius: 8px;
-  transition: background 0.15s, color 0.15s;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.4);
+  font: 400 0.72rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.15s;
 }
 .import-file-btn:hover {
-  background: rgba(0, 0, 0, 0.12);
+  background: transparent;
   color: #000;
 }
-#build-bb {
-  border: none; cursor: pointer; background: #2f6fed; color: #fff;
-  font: 500 0.72rem 'Inter', sans-serif; padding: 8px 14px; border-radius: 8px;
+#build-bb, #build-sch {
+  border: none; cursor: pointer; background: transparent; color: rgba(0, 0, 0, 0.4);
+  font: 400 0.72rem 'Inter', sans-serif; letter-spacing: 0; padding: 0; border-radius: 0;
 }
-#build-bb:hover { background: #265fd0; }
+#build-bb:hover, #build-sch:hover { background: transparent; color: #000; }
+#build-sch {
+  background: transparent;
+  color: rgba(0, 0, 0, 0.4);
+}
+#build-sch:hover { background: transparent; color: #000; }
 #bridge-status { font-size: 0.64rem; color: var(--muted); }
 
 /* ---- Serial Monitor (slides up from bottom) -------------------------------- */
@@ -583,23 +603,24 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: #2d2d2d;
   font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: #e0e0e0;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: rgba(224, 224, 224, 0.7);
   flex-shrink: 0;
 }
 #serial-close {
   border: none;
-  background: rgba(255, 255, 255, 0.1);
+  background: transparent;
   cursor: pointer;
-  border-radius: 6px;
-  padding: 4px 9px;
+  border-radius: 0;
+  padding: 4px 6px;
   font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.7);
-  transition: background 0.15s, color 0.15s;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.15s;
 }
 #serial-close:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: transparent;
   color: #fff;
 }
 .serial-output {
@@ -637,15 +658,16 @@ body {
 .serial-controls button {
   border: none;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
-  font: 500 0.68rem 'Inter', sans-serif;
-  padding: 6px 12px;
-  border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.15s;
 }
 .serial-controls button:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: transparent;
   color: #fff;
 }
 
