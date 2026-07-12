@@ -1,9 +1,9 @@
 // Breadboard simulator: palette, placement, wiring, inspector, sim loop.
 
 import { P, E, BODY, buildBoard, nearestHole, HOLE_BY_ID, baseNetOf } from './board.js?v=3';
-import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=32';
+import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=33';
 import { runSim, portNode } from './sim.js?v=3';
-import { importFromSim, exportBreadboardToText } from './bridge.js?v=9';
+import { importFromSim, exportBreadboardToText } from './bridge.js?v=10';
 
 const svg = document.getElementById('canvas');
 const world = document.getElementById('world');
@@ -101,12 +101,6 @@ function fitView() {
   let vh = stageRect.height;
   if (vw < 40 || vh < 40) return;
 
-  // Schematic is position:fixed over the right half — subtract any overlap
-  if (appEl.classList.contains('schematic-open') && schEl) {
-    const schRect = schEl.getBoundingClientRect();
-    const overlapX = Math.max(0, stageRect.right - schRect.left);
-    vw = Math.max(80, vw - overlapX);
-  }
   // Serial monitor sits over the bottom — subtract any overlap
   const serialEl = document.getElementById('serial-monitor');
   if (appEl.classList.contains('serial-open') && serialEl) {
@@ -115,21 +109,25 @@ function fitView() {
     vh = Math.max(80, vh - overlapY);
   }
 
+  const narrow = appEl.classList.contains('schematic-open');
   const b = contentBounds();
-  const padX = 56;
-  const padY = 48;
-  const availW = Math.max(80, vw - padX * 2);
-  const availH = Math.max(80, vh - padY * 2);
+  // Reserve chrome so the board centers in the clear canvas under the wirebar
+  const padL = 48;
+  const padR = 48;
+  const padT = 52;
+  const padB = 48;
+  const availW = Math.max(80, vw - padL - padR);
+  const availH = Math.max(80, vh - padT - padB);
 
   let k = Math.min(availW / Math.max(b.w, 1), availH / Math.max(b.h, 1));
-  k = Math.min(1.2, Math.max(0.2, k));
+  k = Math.min(1.2, Math.max(0.15, k));
 
   const cx = (b.minX + b.maxX) / 2;
   const cy = (b.minY + b.maxY) / 2;
   view = {
     k,
-    x: vw / 2 - cx * k,
-    y: vh / 2 - cy * k,
+    x: padL + availW / 2 - cx * k,
+    y: padT + availH / 2 - cy * k,
   };
   applyView();
   refreshSelBox();
@@ -152,20 +150,51 @@ const rotXY = (x, y, rot) => {
 function footprintAt(def, wx, wy, rot) {
   const anchor = nearestHole(wx, wy, P * 0.75);
   if (!anchor) return { ok: false, holes: [] };
-  const holes = [];
-  for (const pin of def.pins) {
-    const [dx, dy] = rotXY(pin.x, pin.y, rot);
-    const h = nearestHole(anchor.x + dx * P, anchor.y + dy * P, P * 0.34);
-    if (!h) return { ok: false, holes: [], anchor };
-    holes.push(h.id);
+
+  const tryPins = (pins, pinTol) => {
+    const holes = [];
+    for (const pin of pins) {
+      const [dx, dy] = rotXY(pin.x, pin.y, rot);
+      const h = nearestHole(anchor.x + dx * P, anchor.y + dy * P, pinTol);
+      if (!h) return null;
+      holes.push(h.id);
+    }
+    if (new Set(holes).size !== holes.length) return null;
+    for (const id of holes) {
+      const o = occ.get(id);
+      if (o !== undefined && (!dragging || o !== dragging.inst?.uid)) return null;
+    }
+    return { ok: true, holes, anchor };
+  };
+
+  // LEDs: allow span ±1..4 so a rotated LED can reach a power rail from the
+  // board edge (a↔T± or j↔B±). Prefer rail hits when the cursor is near a rail.
+  if (def.sim?.type === 'led') {
+    const nearTopRail = wy < (4.4 * P);
+    const nearBotRail = wy > (15.4 * P);
+    const preferRail = nearTopRail || nearBotRail || ((rot & 1) === 1);
+    const hits = [];
+    for (const dir of [1, -1]) {
+      for (let span = 1; span <= 4; span++) {
+        const fp = tryPins(
+          [{ x: 0, y: 0, name: 'a' }, { x: dir * span, y: 0, name: 'k' }],
+          span === 1 ? P * 0.34 : P * 0.62,
+        );
+        if (!fp) continue;
+        const rail = fp.holes.some((id) => /^[TB][+-]/.test(id));
+        hits.push({ ...fp, span: Math.abs(span), rail });
+      }
+    }
+    if (!hits.length) return { ok: false, holes: [], anchor };
+    hits.sort((a, b) => {
+      if (preferRail && a.rail !== b.rail) return a.rail ? -1 : 1;
+      if (a.rail !== b.rail) return a.rail ? -1 : 1;
+      return a.span - b.span;
+    });
+    return hits[0];
   }
-  const distinct = new Set(holes);
-  if (distinct.size !== holes.length) return { ok: false, holes: [], anchor };
-  for (const id of holes) {
-    const o = occ.get(id);
-    if (o !== undefined && (!dragging || o !== dragging.inst?.uid)) return { ok: false, holes: [], anchor };
-  }
-  return { ok: true, holes, anchor };
+
+  return tryPins(def.pins, P * 0.34) || { ok: false, holes: [], anchor };
 }
 
 // world position of a free part's port, accounting for its rotation angle
@@ -1264,17 +1293,21 @@ schFrame.addEventListener('load', hookCircuitJS);
 hookCircuitJS();
 
 document.getElementById('btn-schematic').addEventListener('click', () => {
-  const wasOpen = schEl.classList.contains('open');
   schEl.classList.toggle('open');
   appEl.classList.toggle('schematic-open');
-  // Delay fitView to let CSS transition complete
-  setTimeout(() => fitView(), 350);
+  // Refit after the flex width transition settles
+  setTimeout(() => fitView(), 340);
 });
 document.getElementById('sch-close').addEventListener('click', () => {
   schEl.classList.remove('open');
   appEl.classList.remove('schematic-open');
-  // Delay fitView to let CSS transition complete
-  setTimeout(() => fitView(), 350);
+  setTimeout(() => fitView(), 340);
+});
+schEl.addEventListener('transitionend', (e) => {
+  if (e.target !== schEl) return;
+  if (e.propertyName === 'max-width' || e.propertyName === 'flex-basis' || e.propertyName === 'opacity') {
+    fitView();
+  }
 });
 document.getElementById('build-bb').addEventListener('click', () => {
   const status = document.getElementById('bridge-status');

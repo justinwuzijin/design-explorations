@@ -2,7 +2,7 @@
 // Board parts use pitch-unit pin offsets from the anchor pin (0,0) and snap to
 // holes. Free parts live off-board and expose snappable "ports" for wires.
 
-import { P, E } from './board.js?v=3';
+import { P, E, HOLE_BY_ID } from './board.js?v=3';
 
 // ---- shared art helpers -----------------------------------------------------
 
@@ -111,20 +111,36 @@ const DOME_DIM = { red: '#7a3834', green: '#3a6840', yellow: '#7a7034' };
 const LED_RIM = { red: '#9a7a74', green: '#7a9074', yellow: '#9a9068' };
 
 function drawLED(g, inst) {
-  // Overhead LED: sharp leads into adjacent holes, flat cathode rim
-  lead(g, 0, 0, 0, 6, 1.45);
-  lead(g, P, 0, P, 6, 1.45);
-  const cx = P / 2, cy = 1.2;
+  // Local X of pin 1 (may be negative if the cathode is "behind" the anode)
+  let lx = P;
+  if (inst?.holes?.length >= 2) {
+    const a = HOLE_BY_ID.get(inst.holes[0]);
+    const b = HOLE_BY_ID.get(inst.holes[1]);
+    if (a && b) {
+      const wx = b.x - a.x, wy = b.y - a.y;
+      const r = (inst.rot || 0) & 3;
+      if (r === 0) lx = wx;
+      else if (r === 1) lx = wy;
+      else if (r === 2) lx = -wx;
+      else lx = -wy;
+      if (!Number.isFinite(lx) || Math.abs(lx) < 1) lx = P;
+    }
+  }
+  // Overhead LED: sharp leads into the two holes, body centered between them
+  lead(g, 0, 0, 0, 5, 1.45);
+  lead(g, lx, 0, lx, 5, 1.45);
+  const cx = lx / 2, cy = 1.2;
   const c = inst.props.color || 'red';
   const glow = E('circle', { cx, cy, r: 12, fill: LED_GLOW[c], opacity: 0, filter: 'url(#ledGlow)' }, g);
   glow.style.mixBlendMode = 'screen';
   // Flange with cathode flat — no soft shadow / bubbly highlight
+  const flat = lx >= 0 ? 1 : -1;
   E('path', {
-    d: `M ${cx + 6.4} ${cy - 5.8} A 8.4 8.4 0 1 0 ${cx + 6.4} ${cy + 5.8} Z`,
+    d: `M ${cx + flat * 6.4} ${cy - 5.8} A 8.4 8.4 0 1 0 ${cx + flat * 6.4} ${cy + 5.8} Z`,
     fill: LED_RIM[c],
   }, g);
   E('line', {
-    x1: cx + 6.4, y1: cy - 5.8, x2: cx + 6.4, y2: cy + 5.8,
+    x1: cx + flat * 6.4, y1: cy - 5.8, x2: cx + flat * 6.4, y2: cy + 5.8,
     stroke: 'rgba(0,0,0,0.22)', 'stroke-width': 0.8, 'stroke-linecap': 'butt',
   }, g);
   const body = E('circle', { cx, cy, r: 6.5, fill: DOME_DIM[c] }, g);

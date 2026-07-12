@@ -190,16 +190,19 @@ body {
 
 /* ---- stage -------------------------------------------------------------- */
 #stage {
-  flex: 1;
+  flex: 1 1 0;
   position: relative;
   min-width: 0;
+  overflow: hidden; /* keep wirebar, credits, zoom inside the visible canvas */
   background: var(--bg);
-  transition: flex 0.3s ease, max-width 0.3s ease, margin-bottom 0.3s ease;
+  transition: flex 0.3s ease, margin-bottom 0.3s ease;
+  container-type: inline-size;
+  container-name: stage;
 }
-/* squeeze stage when schematic panel is open — keep canvas in the left half */
+/* Equal split with the Falstad panel — both get real workspace */
 #app.schematic-open #stage {
-  flex: 0 0 50%;
-  max-width: 50%;
+  flex: 1 1 0;
+  min-width: 240px;
 }
 
 /* ---- canvas tools (top-right corner of the stage) ----------------------- */
@@ -235,7 +238,7 @@ body {
   z-index: 12;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 #zoom-controls button {
   width: auto;
@@ -243,7 +246,7 @@ body {
   display: inline;
   border: none;
   cursor: pointer;
-  font: 400 1rem 'Inter', sans-serif;
+  font: 400 0.72rem 'Inter', sans-serif;
   line-height: 1;
   color: rgba(0, 0, 0, 0.48);
   background: transparent;
@@ -258,7 +261,7 @@ body {
 #zoom-pct {
   min-width: 0;
   text-align: center;
-  font: 400 0.8rem 'Inter', sans-serif;
+  font: 400 0.58rem 'Inter', sans-serif;
   letter-spacing: 0;
   color: rgba(0, 0, 0, 0.48);
   background: transparent;
@@ -270,18 +273,59 @@ body {
   user-select: none;
 }
 
-/* ---- credits ------------------------------------------------------------ */
+/* ---- credits — always centered on the visible stage, one line ----------- */
 #credits {
   position: absolute;
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
   z-index: 12;
-  font: 400 0.72rem 'Inter', sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
   color: rgba(0, 0, 0, 0.28);
   letter-spacing: 0;
   pointer-events: none;
   user-select: none;
+  max-width: calc(100% - 100px);
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* shrink to stay on one line as the stage narrows */
+  font-size: clamp(0.5rem, 0.35rem + 1.6cqi, 0.65rem);
+}
+#credits .credit-name {
+  position: relative;
+  display: inline-block;
+  color: inherit;
+  text-decoration: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+/* orange jumper-wire underline */
+#credits .credit-name::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -3px;
+  height: 2.5px;
+  background: #e07b39;
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.35),
+    0 0.5px 0 rgba(120, 50, 10, 0.25);
+  transform: scaleX(1);
+  transform-origin: center;
+}
+#credits .credit-name:hover {
+  color: #e07b39;
+  transform: translateY(-2px);
+}
+#credits .credit-name:hover::after {
+  transform: translateY(1px);
 }
 #canvas {
   width: 100%;
@@ -476,47 +520,158 @@ body {
   padding: 0;
 }
 
-/* ---- CircuitJS schematic drawer ----------------------------------------- */
+/* ---- CircuitJS / Falstad panel (split-pane sibling of stage) ------------ */
 #schematic {
-  position: fixed;
-  top: 46px;
-  right: 0;
-  bottom: 0;
-  width: 50%;
-  background: #fff;
-  border-left: 1px solid var(--rule);
-  box-shadow: -10px 0 34px rgba(0, 0, 0, 0.14);
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
-  z-index: 40;
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  align-self: stretch;
+  background: #0e0e0e;
+  border-left: 0 solid #2a2a2a;
+  box-shadow: none;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: flex-basis 0.28s ease, max-width 0.28s ease, opacity 0.2s ease,
+    border-left-width 0.28s ease, margin-bottom 0.3s ease;
+  z-index: 30;
   display: flex;
   flex-direction: column;
 }
-#schematic.open { transform: none; }
+/* True split pane: share leftover width with the board — Falstad needs room */
+#schematic.open {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 280px;
+  max-width: none;
+  opacity: 1;
+  pointer-events: auto;
+  border-left-width: 1px;
+}
+/* With the parts drawer open, give the board a touch more room */
+#app.schematic-open:not(.palette-hidden) #schematic.open {
+  flex: 0.92 1 0;
+}
+#app.schematic-open:not(.palette-hidden) #stage {
+  flex: 1.08 1 0;
+}
+
+/* Keep wirebar on the same row as circuit/reset; leave room on the right */
+#app.schematic-open #wirebar {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 110px);
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+#app.schematic-open .wb-swatches {
+  transform: none;
+  flex-wrap: nowrap;
+  padding: 5px 10px;
+  gap: 7px;
+}
+#app.schematic-open .wb-sw {
+  width: 15px;
+  height: 15px;
+}
+#app.schematic-open .wb-custom {
+  width: 16px;
+  height: 16px;
+}
+#app.schematic-open .wb-plus {
+  font-size: 15px;
+}
+#app.schematic-open #canvas-tools {
+  top: 12px;
+  right: 12px;
+  height: 28px;
+  align-items: center;
+}
+#app.schematic-open #credits {
+  left: 50%;
+  right: auto;
+  bottom: 12px;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+  max-width: calc(100% - 90px);
+  font-size: clamp(0.48rem, 0.32rem + 1.5cqi, 0.58rem);
+}
+#app.schematic-open #zoom-controls {
+  left: 12px;
+  bottom: 12px;
+}
+#app.schematic-open #inspector {
+  right: 12px;
+  top: 78px;
+  max-width: min(220px, calc(100% - 24px));
+  max-height: calc(100% - 110px);
+}
+
 .sch-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px; border-bottom: 1px solid var(--rule);
-  font-size: 0.72rem; font-weight: 400; letter-spacing: 0;
-  color: rgba(0, 0, 0, 0.45);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  background: #161616;
+  border-bottom: 1px solid #2a2a2a;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  min-width: 0;
+  height: 34px;
+}
+.sch-title {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.55);
+}
+.sch-head-actions {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 #sch-close {
   border: none;
   background: transparent;
   cursor: pointer;
-  color: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.35);
   font-weight: 400;
-  padding: 4px 6px;
+  padding: 2px 4px;
   font-size: 0.78rem;
+  flex: 0 0 auto;
 }
-#sch-close:hover { color: #000; }
-#sch-frame { flex: 1; border: none; width: 100%; background: #000; }
-.sch-import {
-  border-top: 1px solid var(--rule);
-  padding: 10px 14px 12px;
-  display: flex; flex-direction: column; gap: 8px;
+#sch-close:hover { color: #fff; }
+#sch-frame {
+  flex: 1 1 auto;
+  border: none;
+  width: 100%;
+  min-height: 0;
+  background: #000;
 }
-.sch-tip { font-size: 0.64rem; color: var(--muted); line-height: 1.5; }
-.sch-tip b { color: rgba(0, 0, 0, 0.6); }
+.sch-tip {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 5px 12px 6px;
+  font-size: 0.58rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.32);
+  background: #121212;
+  border-top: 1px solid #2a2a2a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sch-tip b { color: rgba(255, 255, 255, 0.5); font-weight: 400; }
 #netlist {
   height: 74px; resize: vertical;
   font: 0.66rem/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
@@ -524,33 +679,42 @@ body {
   background: #fbfaf8;
 }
 #netlist:focus { outline: none; border-color: #b9c6e8; }
-.sch-row { display: flex; align-items: center; gap: 12px; }
 .import-file-btn {
   display: inline-block;
   cursor: pointer;
   background: transparent;
-  color: rgba(0, 0, 0, 0.4);
-  font: 400 0.72rem 'Inter', sans-serif;
+  color: rgba(255, 255, 255, 0.4);
+  font: 400 0.68rem 'Inter', sans-serif;
   letter-spacing: 0;
   padding: 0;
   border-radius: 0;
   transition: color 0.15s;
+  white-space: nowrap;
 }
 .import-file-btn:hover {
   background: transparent;
-  color: #000;
+  color: #fff;
 }
 #build-bb, #build-sch {
-  border: none; cursor: pointer; background: transparent; color: rgba(0, 0, 0, 0.4);
-  font: 400 0.72rem 'Inter', sans-serif; letter-spacing: 0; padding: 0; border-radius: 0;
-}
-#build-bb:hover, #build-sch:hover { background: transparent; color: #000; }
-#build-sch {
+  border: none;
+  cursor: pointer;
   background: transparent;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.4);
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  border-radius: 0;
+  white-space: nowrap;
 }
-#build-sch:hover { background: transparent; color: #000; }
-#bridge-status { font-size: 0.64rem; color: var(--muted); }
+#build-bb:hover, #build-sch:hover { background: transparent; color: #fff; }
+#bridge-status {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
 
 /* ---- Serial Monitor (slides up from bottom) -------------------------------- */
 #serial-monitor {
@@ -671,7 +835,8 @@ body {
   color: #fff;
 }
 
-/* Keep canvas above the serial panel without shoving the inspector off-screen */
-#app.serial-open #stage {
+/* Keep canvas + schematic above the serial panel */
+#app.serial-open #stage,
+#app.serial-open #schematic.open {
   margin-bottom: var(--serial-h);
 }

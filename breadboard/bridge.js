@@ -3,7 +3,7 @@
 // Export rebuilds a conventional gate-level schematic from the breadboard.
 
 import { BODY, HOLE_BY_ID, baseNetOf, COLS, RAIL_COUNT } from './board.js?v=3';
-import { CATALOG, DEF_BY_ID } from './parts.js?v=30';
+import { CATALOG, DEF_BY_ID } from './parts.js?v=33';
 
 // ---- gate / IC packing tables ------------------------------------------------
 
