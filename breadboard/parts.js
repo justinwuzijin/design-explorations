@@ -230,72 +230,120 @@ function draw5V(g) {
 
 function drawArduino(g, inst) {
   const W = 214, H = 170;
-  // PCB board
-  E('rect', { x: 0, y: 0, width: W, height: H, rx: 8, fill: '#0f7a8a', filter: 'url(#softShadow)' }, g);
-  E('rect', { x: 0, y: 0, width: W, height: 5, rx: 3, fill: 'rgba(255,255,255,0.12)' }, g);
+  // Classic Arduino teal-green PCB
+  const pcb = '#00979D';
+  const pcbDark = '#007A80';
+  E('rect', { x: 0, y: 0, width: W, height: H, rx: 8, fill: pcb, filter: 'url(#softShadow)' }, g);
+  // subtle edge bevel / copper tone
+  E('rect', { x: 0, y: 0, width: W, height: H, rx: 8, fill: 'none', stroke: pcbDark, 'stroke-width': 1.2 }, g);
+  E('rect', { x: 0, y: 0, width: W, height: 5, rx: 3, fill: 'rgba(255,255,255,0.14)' }, g);
 
-  // USB connector (left side, top)
-  E('rect', { x: -12, y: 18, width: 16, height: 12, fill: 'url(#metalG)' }, g);
-  E('rect', { x: -8, y: 20, width: 10, height: 8, fill: '#0a0a0c' }, g);
+  // Mounting holes
+  for (const [mx, my] of [[10, 10], [W - 10, 10], [10, H - 10], [W - 14, H - 22]]) {
+    E('circle', { cx: mx, cy: my, r: 3.2, fill: '#0a0a0c', opacity: 0.55 }, g);
+    E('circle', { cx: mx, cy: my, r: 2.1, fill: 'none', stroke: 'rgba(255,255,255,0.25)', 'stroke-width': 0.6 }, g);
+  }
 
-  // Barrel jack (left side, bottom)
-  E('rect', { x: -10, y: 102, width: 30, height: 34, rx: 4, fill: '#17181c' }, g);
-  E('circle', { cx: 5, cy: 119, r: 7, fill: '#0a0a0c' }, g);
+  // USB Type-B connector (left, top)
+  E('rect', { x: -14, y: 16, width: 18, height: 16, rx: 1.5, fill: 'url(#metalG)' }, g);
+  E('rect', { x: -11, y: 19, width: 12, height: 10, rx: 1, fill: '#0a0a0c' }, g);
+  E('rect', { x: -9, y: 21, width: 7, height: 6, fill: '#2a2a2e' }, g);
+
+  // Barrel jack (left, bottom)
+  E('rect', { x: -10, y: 100, width: 28, height: 36, rx: 4, fill: '#17181c' }, g);
+  E('rect', { x: -10, y: 100, width: 28, height: 6, rx: 2, fill: 'rgba(255,255,255,0.08)' }, g);
+  E('circle', { cx: 4, cy: 118, r: 7.5, fill: '#0a0a0c' }, g);
+  E('circle', { cx: 4, cy: 118, r: 3.2, fill: 'url(#metalG)' }, g);
 
   // Digital pins header (top, 2 sections: 8 pins + 6 pins)
-  // Section 1: pins 0-7
   E('rect', { x: 123, y: 2, width: 8 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
-  // Section 2: pins 8-13
   E('rect', { x: 41, y: 2, width: 6 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
+  // Header pins glints
+  for (let i = 0; i < 8; i++) {
+    E('rect', { x: 125 + i * 10.16, y: 3.5, width: 2.2, height: 7, rx: 0.4, fill: 'rgba(200,180,100,0.35)' }, g);
+  }
+  for (let i = 0; i < 6; i++) {
+    E('rect', { x: 43 + i * 10.16, y: 3.5, width: 2.2, height: 7, rx: 0.4, fill: 'rgba(200,180,100,0.35)' }, g);
+  }
 
-  // Power header (bottom left, 8 pins)
+  // Power header (bottom left)
   E('rect', { x: 41, y: H - 12, width: 8 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
+  for (let i = 0; i < 8; i++) {
+    E('rect', { x: 43 + i * 10.16, y: H - 10.5, width: 2.2, height: 7, rx: 0.4, fill: 'rgba(200,180,100,0.35)' }, g);
+  }
 
-  // Analog pins header (bottom right, 6 pins)
+  // Analog pins header (bottom right)
   E('rect', { x: 143, y: H - 12, width: 6 * 10.16, height: 10, rx: 1.5, fill: '#17181c' }, g);
+  for (let i = 0; i < 6; i++) {
+    E('rect', { x: 145 + i * 10.16, y: H - 10.5, width: 2.2, height: 7, rx: 0.4, fill: 'rgba(200,180,100,0.35)' }, g);
+  }
+
+  // ICSP header (2x3)
+  E('rect', { x: 178, y: 118, width: 22, height: 16, rx: 1.5, fill: '#17181c' }, g);
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < 3; c++) {
+      E('circle', { cx: 183 + c * 6, cy: 123 + r * 6, r: 1.4, fill: 'rgba(200,180,100,0.45)' }, g);
+    }
+  }
+
+  // Voltage regulator
+  E('rect', { x: 28, y: 88, width: 18, height: 12, rx: 1, fill: '#1a1b20' }, g);
+  E('path', { d: 'M28 88 L37 82 L46 88 Z', fill: '#1a1b20' }, g);
+
+  // Crystal oscillator
+  E('rect', { x: 58, y: 78, width: 14, height: 8, rx: 3, fill: '#c8c4b8', stroke: '#9a9688', 'stroke-width': 0.5 }, g);
+
+  // Small SMD caps / components
+  E('rect', { x: 54, y: 92, width: 6, height: 3.5, rx: 0.5, fill: '#c9a24a' }, g);
+  E('rect', { x: 64, y: 92, width: 6, height: 3.5, rx: 0.5, fill: '#c9a24a' }, g);
+  E('rect', { x: 36, y: 58, width: 5, height: 8, rx: 0.5, fill: '#2a5a9a' }, g);
+  E('rect', { x: 44, y: 58, width: 5, height: 8, rx: 0.5, fill: '#2a5a9a' }, g);
+
+  // Reset button
+  E('rect', { x: 22, y: 42, width: 12, height: 12, rx: 1.5, fill: '#17181c' }, g);
+  E('circle', { cx: 28, cy: 48, r: 3.2, fill: '#c43c3c' }, g);
+  txt(g, 28, 62, 'RESET', 3.2, 'rgba(255,255,255,0.55)');
 
   // ATMEGA328P chip
   E('rect', { x: 76, y: 98, width: 96, height: 26, rx: 2.5, fill: 'url(#dipG)' }, g);
+  E('circle', { cx: 82, cy: 104, r: 1.6, fill: '#3a3a38' }, g); // pin 1 marker
   txt(g, 124, 114, 'ATMEGA328P', 5.4, '#cfcdc8');
 
   // Branding
-  txt(g, 107, 62, 'ARDUINO', 11, '#eaf5f6', 'middle', 600);
-  txt(g, 107, 74, 'UNO', 8, 'rgba(234,245,246,0.8)', 'middle', 600);
+  txt(g, 107, 58, 'ARDUINO', 11, '#eaf8f8', 'middle', 700);
+  txt(g, 107, 72, 'UNO', 9, 'rgba(234,248,248,0.85)', 'middle', 600);
 
   // Status LEDs (right side)
   const statusLED = E('circle', { cx: 190, cy: 46, r: 3, fill: '#3adb6a' }, g);
-  txt(g, 184, 49, 'ON', 3.8, 'rgba(255,255,255,0.7)', 'end');
+  txt(g, 184, 49, 'ON', 3.8, 'rgba(255,255,255,0.75)', 'end');
   const txLED = E('circle', { cx: 190, cy: 56, r: 2.2, fill: '#ff8f2e', opacity: 0 }, g);
-  txt(g, 184, 58, 'TX', 3.2, 'rgba(255,255,255,0.6)', 'end');
+  txt(g, 184, 58, 'TX', 3.2, 'rgba(255,255,255,0.65)', 'end');
   const rxLED = E('circle', { cx: 190, cy: 64, r: 2.2, fill: '#ff8f2e', opacity: 0 }, g);
-  txt(g, 184, 66, 'RX', 3.2, 'rgba(255,255,255,0.6)', 'end');
+  txt(g, 184, 66, 'RX', 3.2, 'rgba(255,255,255,0.65)', 'end');
 
-  // Pin labels - Digital pins (top header, right to left: 0-7, then 8-13)
-  const pinSpacing = 10.16;  // Standard 0.1" header spacing
+  // Pin labels - Digital pins
+  const pinSpacing = 10.16;
 
-  // Pins 0-7 (rightmost section)
   for (let i = 0; i <= 7; i++) {
     const x = 123 + (7 - i) * pinSpacing;
-    txt(g, x + 5, 16, i.toString(), 3.4, 'rgba(255,255,255,0.85)');
+    txt(g, x + 5, 16, i.toString(), 3.4, 'rgba(255,255,255,0.9)');
   }
 
-  // Pins 8-13 (left section)
   for (let i = 8; i <= 13; i++) {
     const x = 41 + (13 - i) * pinSpacing;
-    txt(g, x + 5, 16, i.toString(), 3.4, 'rgba(255,255,255,0.85)');
+    txt(g, x + 5, 16, i.toString(), 3.4, 'rgba(255,255,255,0.9)');
   }
 
-  // Pin labels - Power pins (bottom left header, left to right)
+  // Power pin labels
   const powerLabels = ['5V', '5V', 'GND', 'GND', 'VIN'];
   for (let i = 0; i < powerLabels.length; i++) {
-    const x = 41 + (4 - i) * pinSpacing;  // Reverse order for visual alignment
-    txt(g, x + 5, H - 16, powerLabels[i], 3.4, 'rgba(255,255,255,0.85)');
+    const x = 41 + (4 - i) * pinSpacing;
+    txt(g, x + 5, H - 16, powerLabels[i], 3.4, 'rgba(255,255,255,0.9)');
   }
 
-  // Pin labels - Analog pins (bottom right, right to left: A0-A5)
   for (let i = 0; i < 6; i++) {
     const x = 143 + (5 - i) * pinSpacing;
-    txt(g, x + 5, H - 16, `A${i}`, 3.4, 'rgba(255,255,255,0.85)');
+    txt(g, x + 5, H - 16, `A${i}`, 3.4, 'rgba(255,255,255,0.9)');
   }
 
   inst._dyn = { statusLED, txLED, rxLED };
@@ -529,7 +577,7 @@ export const CATALOG = [
 
   // --- Arduino Uno (free part with digital and analog I/O)
   {
-    id: 'arduino', cat: 'power', name: 'Arduino Uno', kind: 'free',
+    id: 'arduino', cat: 'power', name: 'arduino uno', kind: 'free',
     ports: (() => {
       const H = 170;
       const pinSpacing = 10.16;  // 0.1" header spacing in SVG units

@@ -3,7 +3,7 @@
 // Not a full SPICE — just enough physics for real breadboard-lab behavior.
 
 import { baseNetOf } from './board.js';
-import { ArduinoRuntime } from './arduino.js';
+import { ArduinoRuntime } from './arduino.js?v=2';
 
 // node key for a placed pin: base net of the hole under it
 export function pinNode(inst, i) {

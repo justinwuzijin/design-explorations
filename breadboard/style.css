@@ -6,6 +6,7 @@
   --muted: #8a877f;
   --rule: #e3e1db;
   --accent: #2f6fed;
+  --serial-h: 280px;
 }
 
 html, body { height: 100%; }
@@ -374,9 +375,12 @@ body {
 #inspector {
   position: absolute;
   right: 16px;
-  bottom: 16px;
+  top: 56px;
+  bottom: auto;
   min-width: 190px;
   max-width: 240px;
+  max-height: calc(100% - 72px);
+  overflow-y: auto;
   background: rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -384,6 +388,7 @@ body {
   border-radius: 14px;
   padding: 13px 14px 12px;
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.13);
+  z-index: 20;
 }
 #inspector h3 {
   font-size: 0.66rem;
@@ -425,6 +430,43 @@ body {
 .ins-actions button:hover { background: rgba(0, 0, 0, 0.12); color: #000; }
 .ins-actions button.danger:hover { background: #fbe4e4; color: #b23c3c; }
 .ins-note { font-size: 0.64rem; color: rgba(0, 0, 0, 0.4); line-height: 1.45; }
+
+.ins-api {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ins-api-block {
+  border-radius: 8px;
+  padding: 7px 8px 6px;
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+.ins-api-block .ins-api-label {
+  display: block;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.58rem;
+  margin-bottom: 3px;
+}
+.ins-api-ok {
+  background: rgba(46, 160, 90, 0.12);
+  color: #1f6b3a;
+  border: 1px solid rgba(46, 160, 90, 0.22);
+}
+.ins-api-ok .ins-api-label { color: #18753a; }
+.ins-api-no {
+  background: rgba(196, 80, 60, 0.1);
+  color: #8a3a2a;
+  border: 1px solid rgba(196, 80, 60, 0.2);
+}
+.ins-api-no .ins-api-label { color: #a94432; }
+.ins-api-block code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.6rem;
+}
 
 /* ---- CircuitJS schematic drawer ----------------------------------------- */
 #schematic {
@@ -497,7 +539,7 @@ body {
   right: 0;
   bottom: 0;
   width: 100%;
-  height: 50vh;
+  height: var(--serial-h);
   background: #1e1e1e;
   border-top: 1px solid var(--rule);
   box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.2);
@@ -508,6 +550,31 @@ body {
   flex-direction: column;
 }
 #serial-monitor.open { transform: none; }
+#serial-monitor.resizing { transition: none; }
+.serial-resize {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+  z-index: 2;
+}
+.serial-resize::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.serial-resize:hover::after,
+#serial-monitor.resizing .serial-resize::after {
+  background: rgba(255, 255, 255, 0.65);
+}
 .serial-head {
   display: flex;
   align-items: center;
@@ -519,6 +586,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.03em;
   color: #e0e0e0;
+  flex-shrink: 0;
 }
 #serial-close {
   border: none;
@@ -543,6 +611,7 @@ body {
   background: #1e1e1e;
   white-space: pre-wrap;
   word-wrap: break-word;
+  min-height: 0;
 }
 .serial-output::-webkit-scrollbar {
   width: 8px;
@@ -563,6 +632,7 @@ body {
   display: flex;
   gap: 8px;
   background: #2d2d2d;
+  flex-shrink: 0;
 }
 .serial-controls button {
   border: none;
@@ -579,7 +649,7 @@ body {
   color: #fff;
 }
 
-/* Adjust stage bottom margin when serial monitor is open */
+/* Keep canvas above the serial panel without shoving the inspector off-screen */
 #app.serial-open #stage {
-  margin-bottom: 50vh;
+  margin-bottom: var(--serial-h);
 }

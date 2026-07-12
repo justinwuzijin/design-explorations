@@ -27,6 +27,7 @@ export class ArduinoRuntime {
 
     // Serial buffer (for debugging)
     this.serialBuffer = [];
+    this.serialVersion = 0;  // bumped on every print so UI can refresh efficiently
 
     // User code functions
     this.setupFn = null;
@@ -117,10 +118,12 @@ export class ArduinoRuntime {
     },
     print: (msg) => {
       this.serialBuffer.push(String(msg));
+      this.serialVersion++;
       console.log('[Arduino]', msg);
     },
     println: (msg) => {
       this.serialBuffer.push(String(msg) + '\n');
+      this.serialVersion++;
       console.log('[Arduino]', msg);
     },
     available: () => 0,
@@ -158,6 +161,7 @@ export class ArduinoRuntime {
     this.analogValues.fill(0);
     this.pwmValues.clear();
     this.serialBuffer = [];
+    this.serialVersion++;
     this.hasRunSetup = false;
     this.millisStart = performance.now();
     this.microsStart = performance.now();

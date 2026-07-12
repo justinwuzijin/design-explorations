@@ -1,8 +1,8 @@
 // Breadboard simulator: palette, placement, wiring, inspector, sim loop.
 
 import { P, E, BODY, buildBoard, nearestHole, HOLE_BY_ID, baseNetOf } from './board.js';
-import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=15';
-import { runSim, portNode } from './sim.js?v=2';
+import { CATALOG, DEF_BY_ID, WIRE_COLORS, fmtOhm } from './parts.js?v=16';
+import { runSim, portNode } from './sim.js?v=3';
 
 const svg = document.getElementById('canvas');
 const world = document.getElementById('world');
@@ -14,6 +14,7 @@ const stage = document.getElementById('stage');
 const hintEl = document.getElementById('hint');
 const inspector = document.getElementById('inspector');
 const zoomPct = document.getElementById('zoom-pct');
+const appEl = document.getElementById('app');
 
 // ---------------------------------------------------------------- state
 const state = { parts: [], wires: [], uid: 1 };
@@ -307,12 +308,54 @@ function addWire(a, b, color, kind) {
 }
 
 // ---------------------------------------------------------------- selection + inspector
-function updateSerialOutput() {
-  const serialOutput = document.getElementById('serial-output');
-  if (!sel || sel.kind !== 'part' || sel.inst.def.sim?.type !== 'arduino') return;
-  const arduino = sel.inst.rt?.arduino;
-  if (!arduino || !arduino.serialBuffer) return;
+let serialSourceUid = null;   // Arduino whose serial output is shown
+let lastSerialVersion = -1;
 
+function findArduinoInst(uid = serialSourceUid) {
+  if (uid != null) {
+    const byUid = state.parts.find((p) => p.uid === uid && p.def.sim?.type === 'arduino');
+    if (byUid) return byUid;
+  }
+  if (sel?.kind === 'part' && sel.inst.def.sim?.type === 'arduino') return sel.inst;
+  return state.parts.find((p) => p.def.sim?.type === 'arduino') || null;
+}
+
+function setSerialHeight(px) {
+  const h = Math.round(Math.min(window.innerHeight * 0.75, Math.max(120, px)));
+  document.documentElement.style.setProperty('--serial-h', `${h}px`);
+  return h;
+}
+
+function openSerialMonitor(inst) {
+  const serialMonitor = document.getElementById('serial-monitor');
+  if (inst) serialSourceUid = inst.uid;
+  else if (serialSourceUid == null) {
+    const found = findArduinoInst();
+    if (found) serialSourceUid = found.uid;
+  }
+  serialMonitor.classList.add('open');
+  appEl.classList.add('serial-open');
+  lastSerialVersion = -1;
+  updateSerialOutput(true);
+}
+
+function closeSerialMonitor() {
+  document.getElementById('serial-monitor').classList.remove('open');
+  appEl.classList.remove('serial-open');
+}
+
+function updateSerialOutput(force = false) {
+  const serialMonitor = document.getElementById('serial-monitor');
+  if (!serialMonitor.classList.contains('open')) return;
+
+  const serialOutput = document.getElementById('serial-output');
+  const inst = findArduinoInst();
+  const arduino = inst?.rt?.arduino;
+  if (!arduino) return;
+
+  const ver = arduino.serialVersion ?? arduino.serialBuffer.length;
+  if (!force && ver === lastSerialVersion) return;
+  lastSerialVersion = ver;
   serialOutput.textContent = arduino.serialBuffer.join('');
   serialOutput.scrollTop = serialOutput.scrollHeight;
 }
@@ -491,10 +534,19 @@ void loop() {
       inspector.appendChild(statusDiv);
 
       const note = document.createElement('div');
-      note.className = 'ins-note';
-      note.style.cssText = 'margin-top:8px;font-size:10px;color:#666;';
-      note.innerHTML = `<strong>Note:</strong> delay() is not supported. Use millis() for timing.<br>
-Supported: pinMode, digitalWrite, digitalRead, analogRead, analogWrite, Serial.print/println`;
+      note.className = 'ins-api';
+      note.innerHTML = `
+        <div class="ins-api-block ins-api-ok">
+          <span class="ins-api-label">Supported</span>
+          <code>pinMode</code>, <code>digitalWrite</code>, <code>digitalRead</code>,
+          <code>analogRead</code>, <code>analogWrite</code>,
+          <code>millis</code>, <code>micros</code>,
+          <code>Serial.print</code> / <code>println</code>
+        </div>
+        <div class="ins-api-block ins-api-no">
+          <span class="ins-api-label">Not supported</span>
+          <code>delay()</code>, <code>delayMicroseconds()</code> — use <code>millis()</code> instead
+        </div>`;
       inspector.appendChild(note);
 
       // Serial Monitor button
@@ -502,20 +554,18 @@ Supported: pinMode, digitalWrite, digitalRead, analogRead, analogWrite, Serial.p
       serialRow.className = 'ins-row';
       serialRow.style.cssText = 'margin-top:10px;';
       const serialBtn = document.createElement('button');
-      serialBtn.textContent = 'Open Serial Monitor';
+      const serialOpen = document.getElementById('serial-monitor').classList.contains('open');
+      serialBtn.textContent = serialOpen ? 'Close Serial Monitor' : 'Open Serial Monitor';
       serialBtn.style.cssText = 'width:100%;padding:8px;border:none;border-radius:6px;background:rgba(0,0,0,0.05);color:rgba(0,0,0,0.65);cursor:pointer;font-weight:500;';
       serialBtn.onclick = () => {
         const serialMonitor = document.getElementById('serial-monitor');
         const isOpen = serialMonitor.classList.contains('open');
         if (isOpen) {
-          serialMonitor.classList.remove('open');
-          appEl.classList.remove('serial-open');
+          closeSerialMonitor();
           serialBtn.textContent = 'Open Serial Monitor';
         } else {
-          serialMonitor.classList.add('open');
-          appEl.classList.add('serial-open');
+          openSerialMonitor(inst);
           serialBtn.textContent = 'Close Serial Monitor';
-          updateSerialOutput();
         }
         setTimeout(() => fitView(), 350);
       };
@@ -1058,17 +1108,46 @@ document.getElementById('zoom-out').addEventListener('click', () => zoomStep(-1)
 
 // Serial monitor controls
 document.getElementById('serial-close').addEventListener('click', () => {
-  document.getElementById('serial-monitor').classList.remove('open');
-  appEl.classList.remove('serial-open');
+  closeSerialMonitor();
   setTimeout(() => fitView(), 350);
 });
 
 document.getElementById('serial-clear').addEventListener('click', () => {
-  if (sel && sel.kind === 'part' && sel.inst.rt?.arduino) {
-    sel.inst.rt.arduino.serialBuffer = [];
-    updateSerialOutput();
+  const inst = findArduinoInst();
+  if (inst?.rt?.arduino) {
+    inst.rt.arduino.serialBuffer = [];
+    inst.rt.arduino.serialVersion++;
+    updateSerialOutput(true);
   }
 });
+
+// Drag the top edge of the serial monitor to resize height
+(() => {
+  const handle = document.getElementById('serial-resize');
+  const panel = document.getElementById('serial-monitor');
+  if (!handle || !panel) return;
+  let startY = 0, startH = 0;
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    startY = e.clientY;
+    startH = panel.getBoundingClientRect().height;
+    panel.classList.add('resizing');
+    handle.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      setSerialHeight(startH + (startY - ev.clientY));
+      fitView();
+    };
+    const up = () => {
+      panel.classList.remove('resizing');
+      handle.releasePointerCapture(e.pointerId);
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      fitView();
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+  });
+})();
 
 // Re-fit every frame while the parts panel slides so the board recenters
 // gradually in sync with the panel (instead of one jump at the end).
@@ -1102,7 +1181,6 @@ function hookCircuitJS() {
 schFrame.addEventListener('load', hookCircuitJS);
 hookCircuitJS();
 
-const appEl = document.getElementById('app');
 document.getElementById('btn-schematic').addEventListener('click', () => {
   const wasOpen = schEl.classList.contains('open');
   schEl.classList.toggle('open');
@@ -1674,11 +1752,8 @@ function frame(ts) {
     }
   }
 
-  // Update serial monitor if open and Arduino selected
-  const serialMonitor = document.getElementById('serial-monitor');
-  if (serialMonitor.classList.contains('open') && sel && sel.kind === 'part' && sel.inst.def.sim?.type === 'arduino') {
-    updateSerialOutput();
-  }
+  // Update serial monitor whenever open (keeps streaming after selecting the button)
+  updateSerialOutput();
 
   requestAnimationFrame(frame);
 }
