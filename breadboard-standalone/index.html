@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Breadboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header id="topbar">
+    <div class="tb-left">
+      <a href="https://www.justinzwu.com/" id="back" target="_blank" rel="noopener noreferrer">← justinzwu.com</a>
+      <input id="projname" value="untitled circuit" spellcheck="false" />
+    </div>
+    <div class="tb-right"></div>
+  </header>
+
+  <div id="app">
+    <button id="menu-toggle" title="hide/show parts" aria-label="toggle parts panel">
+      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+        <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+      </svg>
+    </button>
+    <aside id="palette">
+      <div id="grid"></div>
+    </aside>
+
+    <div id="stage">
+      <svg id="canvas" tabindex="0">
+        <defs>
+          <radialGradient id="holeG" cx="50%" cy="42%" r="60%">
+            <stop offset="0%" stop-color="#000" />
+            <stop offset="70%" stop-color="#1c1c1c" />
+            <stop offset="100%" stop-color="#3a3a38" />
+          </radialGradient>
+          <linearGradient id="boardG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#fbfaf7" />
+            <stop offset="55%" stop-color="#f1efe9" />
+            <stop offset="100%" stop-color="#e7e4dc" />
+          </linearGradient>
+          <linearGradient id="ravineG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#c9c6bd" />
+            <stop offset="18%" stop-color="#efede6" />
+            <stop offset="82%" stop-color="#efede6" />
+            <stop offset="100%" stop-color="#d3d0c7" />
+          </linearGradient>
+          <linearGradient id="dipG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3c3c40" />
+            <stop offset="12%" stop-color="#26262a" />
+            <stop offset="88%" stop-color="#1b1b1f" />
+            <stop offset="100%" stop-color="#0e0e11" />
+          </linearGradient>
+          <linearGradient id="metalG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#e8eaee" />
+            <stop offset="50%" stop-color="#b9bdc4" />
+            <stop offset="100%" stop-color="#8e939b" />
+          </linearGradient>
+          <linearGradient id="resG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#c3ad82" />
+            <stop offset="16%" stop-color="#efe4c6" />
+            <stop offset="50%" stop-color="#d8c59b" />
+            <stop offset="100%" stop-color="#9a8256" />
+          </linearGradient>
+          <linearGradient id="cylShade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.36" />
+            <stop offset="42%" stop-color="#ffffff" stop-opacity="0" />
+            <stop offset="100%" stop-color="#000000" stop-opacity="0.34" />
+          </linearGradient>
+          <linearGradient id="potG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3f74d6" />
+            <stop offset="50%" stop-color="#2b5bb0" />
+            <stop offset="100%" stop-color="#1c3f80" />
+          </linearGradient>
+          <radialGradient id="ceramicG" cx="40%" cy="34%" r="72%">
+            <stop offset="0%" stop-color="#f0c07e" />
+            <stop offset="55%" stop-color="#d99a45" />
+            <stop offset="100%" stop-color="#a5702a" />
+          </radialGradient>
+          <radialGradient id="elecG" cx="42%" cy="38%" r="68%">
+            <stop offset="0%" stop-color="#6f7278" />
+            <stop offset="45%" stop-color="#3b3d43" />
+            <stop offset="100%" stop-color="#17181c" />
+          </radialGradient>
+          <radialGradient id="screwG" cx="40%" cy="35%" r="72%">
+            <stop offset="0%" stop-color="#f3ead0" />
+            <stop offset="50%" stop-color="#cbb98c" />
+            <stop offset="100%" stop-color="#8f7c4f" />
+          </radialGradient>
+          <radialGradient id="ledRedG" cx="42%" cy="38%" r="68%">
+            <stop offset="0%" stop-color="#e8463d" />
+            <stop offset="72%" stop-color="#b72824" />
+            <stop offset="100%" stop-color="#6b1514" />
+          </radialGradient>
+          <radialGradient id="ledRedGd" cx="42%" cy="38%" r="68%">
+            <stop offset="0%" stop-color="#7d3836" />
+            <stop offset="100%" stop-color="#4a1f1e" />
+          </radialGradient>
+          <radialGradient id="ledGreenG" cx="42%" cy="38%" r="68%">
+            <stop offset="0%" stop-color="#b8e8af" />
+            <stop offset="30%" stop-color="#5cc96e" />
+            <stop offset="74%" stop-color="#2a8540" />
+            <stop offset="100%" stop-color="#1a4f28" />
+          </radialGradient>
+          <radialGradient id="ledGreenGd" cx="42%" cy="38%" r="68%">
+            <stop offset="0%" stop-color="#95b392" />
+            <stop offset="58%" stop-color="#476e49" />
+            <stop offset="100%" stop-color="#263d21" />
+          </radialGradient>
+          <radialGradient id="ledYellowG" cx="42%" cy="38%" r="68%">
+            <stop offset="0%" stop-color="#f5e8a8" />
+            <stop offset="32%" stop-color="#e8c940" />
+            <stop offset="76%" stop-color="#c9962a" />
+            <stop offset="100%" stop-color="#7d5b18" />
+          </radialGradient>
+          <radialGradient id="ledYellowGd" cx="42%" cy="38%" r="68%">
+            <stop offset="0%" stop-color="#c4b88e" />
+            <stop offset="58%" stop-color="#8a7a45" />
+            <stop offset="100%" stop-color="#524827" />
+          </radialGradient>
+          <filter id="partShadow" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="2.2" stdDeviation="2.4" flood-color="#000" flood-opacity="0.34" />
+          </filter>
+          <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#000" flood-opacity="0.22" />
+          </filter>
+          <filter id="ledGlow" x="-160%" y="-160%" width="420%" height="420%">
+            <feGaussianBlur stdDeviation="7" />
+          </filter>
+        </defs>
+        <g id="world">
+          <g id="boardL"></g>
+          <g id="partsL"></g>
+          <g id="wiresL"></g>
+          <g id="fxL"></g>
+        </g>
+      </svg>
+      <div id="wirebar">
+        <div class="wb-swatches" id="wb-swatches">
+          <label class="wb-custom" title="custom color">
+            <span class="wb-plus">+</span>
+            <input type="color" id="wb-color" value="#3fa54a" />
+          </label>
+        </div>
+      </div>
+      <div id="canvas-tools">
+        <button id="btn-schematic" title="open CircuitJS schematic">circuit</button>
+        <button id="btn-clear" title="reset the board" aria-label="reset the board">reset</button>
+      </div>
+      <div id="zoom-controls">
+        <button id="zoom-out" title="zoom out" aria-label="zoom out">&#8722;</button>
+        <span id="zoom-pct">100%</span>
+        <button id="zoom-in" title="zoom in" aria-label="zoom in">+</button>
+      </div>
+      <div id="inspector" hidden></div>
+      <div id="credits">designed and built by <a class="credit-name" href="https://www.justinzwu.com/" target="_blank" rel="noopener noreferrer">justin wu</a>. to expedite 192l.</div>
+    </div>
+
+    <aside id="schematic">
+      <div class="sch-head">
+        <span class="sch-title">schematic</span>
+        <div class="sch-head-actions">
+          <label class="import-file-btn" title="Import a Falstad / CircuitJS .txt file">
+            <input type="file" id="import-circuit" accept=".txt,.circuitjs" hidden />
+            import
+          </label>
+          <button id="build-bb" title="Place the schematic onto the breadboard">build board →</button>
+          <button id="build-sch" title="Export the breadboard as a schematic">→ schematic</button>
+          <span id="bridge-status"></span>
+        </div>
+        <button id="sch-close" aria-label="close">✕</button>
+      </div>
+      <iframe id="sch-frame" src="circuitjs/circuitjs.html?startCircuit=blank.txt" title="CircuitJS"></iframe>
+      <p class="sch-tip">Draw in Falstad above, then <b>build board</b> — or wire the breadboard and click <b>→ schematic</b>.</p>
+    </aside>
+  </div>
+
+  <!-- Serial Monitor -->
+  <aside id="serial-monitor">
+    <div id="serial-resize" class="serial-resize" title="Drag to resize"></div>
+    <div class="serial-head">
+      <span>Arduino Serial Monitor</span>
+      <button id="serial-close" aria-label="close">✕</button>
+    </div>
+    <div class="serial-output" id="serial-output"></div>
+    <div class="serial-controls">
+      <button id="serial-clear">Clear Output</button>
+    </div>
+  </aside>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

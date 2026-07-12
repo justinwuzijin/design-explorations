@@ -1,0 +1,842 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f6f5f2;
+  --fg: #111;
+  --muted: #b0ada6;
+  --rule: #e3e1db;
+  --accent: #2f6fed;
+  --serial-h: 280px;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- top bar ------------------------------------------------------------ */
+#topbar {
+  height: 46px;
+  flex: 0 0 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px 0 20px;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(255, 255, 255, 0.6);
+}
+.tb-left { display: flex; align-items: center; gap: 18px; min-width: 0; }
+#back {
+  color: rgba(0, 0, 0, 0.34);
+  font-size: 0.73rem;
+  font-weight: 400;
+  text-decoration: none;
+  letter-spacing: 0;
+  transition: color 0.18s;
+  flex-shrink: 0;
+}
+#back:hover { color: rgba(0, 0, 0, 0.65); }
+#projname {
+  border: none;
+  background: transparent;
+  font: 400 0.82rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  color: var(--fg);
+  width: 220px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+#projname:hover { background: rgba(0, 0, 0, 0.03); }
+#projname:focus { outline: none; background: rgba(0, 0, 0, 0.04); }
+.tb-right { display: flex; gap: 6px; }
+.tb-right button {
+  border: none;
+  cursor: pointer;
+  font: 400 0.7rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  color: rgba(0, 0, 0, 0.4);
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+.tb-right button:hover { background: transparent; color: #000; }
+/* ---- layout ------------------------------------------------------------- */
+#app { flex: 1; display: flex; min-height: 0; overflow: hidden; position: relative; }
+
+/* ---- side flap toggle (hangs off the parts panel's right edge) ---------- */
+#menu-toggle {
+  position: absolute;
+  top: 50%;
+  /* sits flush on the panel's right edge, sticking out to the right */
+  left: clamp(180px, 16.5vw, 250px);
+  z-index: 40;
+  width: 26px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.5);
+  background: #ffffff;
+  border: 1px solid var(--rule);
+  border-left: none;
+  border-radius: 0 11px 11px 0;
+  box-shadow: 3px 0 9px rgba(0, 0, 0, 0.13);
+  transform: translateY(-50%);
+  transform-origin: 0 50%;
+  transition: transform 0.34s cubic-bezier(.34, 1.4, .5, 1), box-shadow 0.24s ease,
+    color 0.15s, background 0.15s, left 0.3s ease;
+}
+#menu-toggle:hover {
+  color: #000;
+  transform: translateY(-50%) translateX(3px);
+  box-shadow: 6px 0 14px rgba(0, 0, 0, 0.18);
+}
+#menu-toggle:active { transform: translateY(-50%) translateX(1px) scale(0.97); }
+#menu-toggle svg { display: block; }
+/* when the panel is tucked away, the flap rides to the screen's left edge */
+#app.palette-hidden #menu-toggle { left: 0; }
+
+/* ---- palette ------------------------------------------------------------ */
+#palette {
+  flex: 0 0 clamp(180px, 16.5vw, 250px);
+  border-right: 1px solid var(--rule);
+  background: #fbfaf8;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  transition: margin-left 0.3s ease, opacity 0.26s ease;
+}
+/* hamburger toggle slides the parts panel out to the left */
+#app.palette-hidden #palette {
+  margin-left: calc(-1 * clamp(180px, 16.5vw, 250px));
+  opacity: 0;
+  pointer-events: none;
+}
+#grid {
+  flex: 1;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  padding: 14px 10px 24px;
+  align-content: start;
+}
+
+.cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  cursor: grab;
+  transition: background 0.12s;
+  touch-action: none;
+  outline: none;
+  border: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.cell:focus, .cell:focus-visible, .cell:active, .cell:hover { outline: none; border: none; background: none; }
+.cell svg:focus { outline: none; }
+.cell:active { cursor: grabbing; }
+.cell svg { width: 78%; height: 78%; overflow: visible; pointer-events: none; transition: transform 0.12s ease-out; }
+.cell .thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  transition: transform 0.12s ease-out;
+}
+.cell:not(.disabled):hover svg,
+.cell:not(.disabled):hover .thumb-img { transform: scale(1.12); }
+.cell.disabled { opacity: 0.45; cursor: default; }
+.cell .tip {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, 70%);   /* hang the tag below the item */
+  font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.4);
+  background: transparent;
+  border-radius: 0;
+  padding: 2px 0;
+  width: max-content;
+  max-width: 96%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  box-shadow: none;
+  z-index: 6;
+}
+.cell:hover .tip { opacity: 1; }
+
+/* ---- stage -------------------------------------------------------------- */
+#stage {
+  flex: 1 1 0;
+  position: relative;
+  min-width: 0;
+  overflow: hidden; /* keep wirebar, credits, zoom inside the visible canvas */
+  background: var(--bg);
+  transition: flex 0.3s ease, margin-bottom 0.3s ease;
+  container-type: inline-size;
+  container-name: stage;
+}
+/* Equal split with the Falstad panel — both get real workspace */
+#app.schematic-open #stage {
+  flex: 1 1 0;
+  min-width: 240px;
+}
+
+/* ---- canvas tools (top-right corner of the stage) ----------------------- */
+#canvas-tools {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 12;
+  display: flex;
+  gap: 14px;
+}
+#canvas-tools button {
+  border: none;
+  cursor: pointer;
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  color: rgba(0, 0, 0, 0.48);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: color 0.15s;
+}
+#canvas-tools button:hover { background: transparent; color: rgba(0, 0, 0, 0.75); }
+
+/* ---- zoom controls (bottom-left corner of the stage) ------------------- */
+#zoom-controls {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+#zoom-controls button {
+  width: auto;
+  height: auto;
+  display: inline;
+  border: none;
+  cursor: pointer;
+  font: 400 0.72rem 'Inter', sans-serif;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.48);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 2px;
+  transition: color 0.15s;
+}
+#zoom-controls button:hover { background: transparent; color: rgba(0, 0, 0, 0.75); }
+#zoom-pct {
+  min-width: 0;
+  text-align: center;
+  font: 400 0.58rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  color: rgba(0, 0, 0, 0.48);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  user-select: none;
+}
+
+/* ---- credits — always centered on the visible stage, one line ----------- */
+#credits {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 12;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.28);
+  letter-spacing: 0;
+  pointer-events: none;
+  user-select: none;
+  max-width: calc(100% - 100px);
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* shrink to stay on one line as the stage narrows */
+  font-size: clamp(0.5rem, 0.35rem + 1.6cqi, 0.65rem);
+}
+#credits .credit-name {
+  position: relative;
+  display: inline-block;
+  color: inherit;
+  text-decoration: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+/* orange jumper-wire underline */
+#credits .credit-name::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -3px;
+  height: 2.5px;
+  background: #e07b39;
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.35),
+    0 0.5px 0 rgba(120, 50, 10, 0.25);
+  transform: scaleX(1);
+  transform-origin: center;
+}
+#credits .credit-name:hover {
+  color: #e07b39;
+  transform: translateY(-2px);
+}
+#credits .credit-name:hover::after {
+  transform: translateY(1px);
+}
+#canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+/* labels (row letters, column numbers, part text) must not be selectable or
+   catch clicks — otherwise dragging a wire highlights the breadboard text */
+#canvas text { pointer-events: none; user-select: none; -webkit-user-select: none; }
+#canvas.wiring { cursor: crosshair; }
+#canvas.panning { cursor: grabbing; }
+
+/* ---- wire color picker (centered) --------------------------------------- */
+#wirebar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: transparent;
+  padding: 0;
+  user-select: none;
+}
+.wb-swatches {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+.wb-sw {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  transform-origin: center center;
+  transition: transform 0.08s ease-out;
+  will-change: transform;
+}
+.wb-custom {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transform-origin: center center;
+  transition: transform 0.08s ease-out;
+  will-change: transform;
+}
+.wb-custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+.wb-plus {
+  font-size: 18px;
+  line-height: 1;
+  color: #111;
+  font-weight: 300;
+  pointer-events: none;
+}
+
+#hint {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.36);
+  letter-spacing: 0;
+  pointer-events: none;
+  max-width: 60%;
+}
+
+/* ---- inspector ---------------------------------------------------------- */
+#inspector {
+  position: absolute;
+  right: 16px;
+  top: 56px;
+  bottom: auto;
+  min-width: 190px;
+  max-width: 240px;
+  max-height: calc(100% - 72px);
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+  z-index: 20;
+}
+#inspector h3 {
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(0, 0, 0, 0.4);
+  margin-bottom: 10px;
+}
+.ins-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ins-row label { font-size: 0.7rem; font-weight: 400; color: rgba(0, 0, 0, 0.45); }
+.ins-row select, .ins-row input[type="number"] {
+  font: 400 0.72rem 'Inter', sans-serif;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: #fff;
+  width: 96px;
+}
+.ins-row input[type="range"] { width: 110px; }
+.ins-actions { display: flex; gap: 14px; margin-top: 10px; align-items: center; }
+.ins-text-btn,
+.ins-actions button {
+  flex: 0 0 auto;
+  border: none;
+  cursor: pointer;
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.5);
+  transition: color 0.15s;
+}
+.ins-text-btn:hover,
+.ins-actions button:hover { background: transparent; color: rgba(0, 0, 0, 0.8); }
+.ins-actions button.danger:hover,
+.ins-text-btn.danger:hover { background: transparent; color: #b23c3c; }
+.ins-rotate {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ins-rotate svg { display: block; opacity: 0.7; }
+.ins-note { font-size: 0.64rem; font-weight: 400; color: rgba(0, 0, 0, 0.32); line-height: 1.45; }
+
+.ins-api {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ins-api-block {
+  border-radius: 0;
+  padding: 0;
+  font-size: 0.62rem;
+  font-weight: 400;
+  line-height: 1.45;
+  background: transparent;
+  border: none;
+  color: rgba(0, 0, 0, 0.45);
+}
+.ins-api-block .ins-api-label {
+  display: block;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 0.62rem;
+  margin-bottom: 2px;
+  color: rgba(0, 0, 0, 0.35);
+}
+.ins-api-block code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.6rem;
+  font-weight: 400;
+  background: transparent;
+  padding: 0;
+}
+
+/* ---- CircuitJS / Falstad panel (split-pane sibling of stage) ------------ */
+#schematic {
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  align-self: stretch;
+  background: #0e0e0e;
+  border-left: 0 solid #2a2a2a;
+  box-shadow: none;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: flex-basis 0.28s ease, max-width 0.28s ease, opacity 0.2s ease,
+    border-left-width 0.28s ease, margin-bottom 0.3s ease;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+}
+/* True split pane: share leftover width with the board — Falstad needs room */
+#schematic.open {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 280px;
+  max-width: none;
+  opacity: 1;
+  pointer-events: auto;
+  border-left-width: 1px;
+}
+/* With the parts drawer open, give the board a touch more room */
+#app.schematic-open:not(.palette-hidden) #schematic.open {
+  flex: 0.92 1 0;
+}
+#app.schematic-open:not(.palette-hidden) #stage {
+  flex: 1.08 1 0;
+}
+
+/* Keep wirebar on the same row as circuit/reset; leave room on the right */
+#app.schematic-open #wirebar {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 110px);
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+#app.schematic-open .wb-swatches {
+  transform: none;
+  flex-wrap: nowrap;
+  padding: 5px 10px;
+  gap: 7px;
+}
+#app.schematic-open .wb-sw {
+  width: 15px;
+  height: 15px;
+}
+#app.schematic-open .wb-custom {
+  width: 16px;
+  height: 16px;
+}
+#app.schematic-open .wb-plus {
+  font-size: 15px;
+}
+#app.schematic-open #canvas-tools {
+  top: 12px;
+  right: 12px;
+  height: 28px;
+  align-items: center;
+}
+#app.schematic-open #credits {
+  left: 50%;
+  right: auto;
+  bottom: 12px;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+  max-width: calc(100% - 90px);
+  font-size: clamp(0.48rem, 0.32rem + 1.5cqi, 0.58rem);
+}
+#app.schematic-open #zoom-controls {
+  left: 12px;
+  bottom: 12px;
+}
+#app.schematic-open #inspector {
+  right: 12px;
+  top: 78px;
+  max-width: min(220px, calc(100% - 24px));
+  max-height: calc(100% - 110px);
+}
+
+.sch-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  background: #161616;
+  border-bottom: 1px solid #2a2a2a;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  min-width: 0;
+  height: 34px;
+}
+.sch-title {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.55);
+}
+.sch-head-actions {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+#sch-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 400;
+  padding: 2px 4px;
+  font-size: 0.78rem;
+  flex: 0 0 auto;
+}
+#sch-close:hover { color: #fff; }
+#sch-frame {
+  flex: 1 1 auto;
+  border: none;
+  width: 100%;
+  min-height: 0;
+  background: #000;
+}
+.sch-tip {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 5px 12px 6px;
+  font-size: 0.58rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.32);
+  background: #121212;
+  border-top: 1px solid #2a2a2a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sch-tip b { color: rgba(255, 255, 255, 0.5); font-weight: 400; }
+#netlist {
+  height: 74px; resize: vertical;
+  font: 0.66rem/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
+  border: 1px solid var(--rule); border-radius: 8px; padding: 8px;
+  background: #fbfaf8;
+}
+#netlist:focus { outline: none; border-color: #b9c6e8; }
+.import-file-btn {
+  display: inline-block;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+.import-file-btn:hover {
+  background: transparent;
+  color: #fff;
+}
+#build-bb, #build-sch {
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  border-radius: 0;
+  white-space: nowrap;
+}
+#build-bb:hover, #build-sch:hover { background: transparent; color: #fff; }
+#bridge-status {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* ---- Serial Monitor (slides up from bottom) -------------------------------- */
+#serial-monitor {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: var(--serial-h);
+  background: #1e1e1e;
+  border-top: 1px solid var(--rule);
+  box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.2);
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+#serial-monitor.open { transform: none; }
+#serial-monitor.resizing { transition: none; }
+.serial-resize {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+  z-index: 2;
+}
+.serial-resize::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.serial-resize:hover::after,
+#serial-monitor.resizing .serial-resize::after {
+  background: rgba(255, 255, 255, 0.65);
+}
+.serial-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #2d2d2d;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: rgba(224, 224, 224, 0.7);
+  flex-shrink: 0;
+}
+#serial-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 0;
+  padding: 4px 6px;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.15s;
+}
+#serial-close:hover {
+  background: transparent;
+  color: #fff;
+}
+.serial-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font: 0.7rem/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: #d4d4d4;
+  background: #1e1e1e;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  min-height: 0;
+}
+.serial-output::-webkit-scrollbar {
+  width: 8px;
+}
+.serial-output::-webkit-scrollbar-track {
+  background: #2d2d2d;
+}
+.serial-output::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+.serial-output::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+.serial-controls {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 14px;
+  display: flex;
+  gap: 8px;
+  background: #2d2d2d;
+  flex-shrink: 0;
+}
+.serial-controls button {
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font: 400 0.68rem 'Inter', sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.15s;
+}
+.serial-controls button:hover {
+  background: transparent;
+  color: #fff;
+}
+
+/* Keep canvas + schematic above the serial panel */
+#app.serial-open #stage,
+#app.serial-open #schematic.open {
+  margin-bottom: var(--serial-h);
+}
