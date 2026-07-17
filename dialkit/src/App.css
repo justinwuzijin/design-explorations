@@ -1,0 +1,125 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  background: #0c0e12;
+  color: #f2f2f2;
+}
+
+.app-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0c0e12;
+}
+
+.ball-canvas {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.path-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+  touch-action: none;
+}
+
+/* Only the curve hit-target / handles capture input — stage stays free */
+.path-overlay .curve-hit,
+.path-overlay .edit-handle {
+  pointer-events: stroke;
+}
+
+.path-overlay.interactive {
+  pointer-events: auto;
+}
+
+.path-overlay.interactive .edit-handle {
+  pointer-events: auto;
+}
+
+.controls-hint {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  padding: 12px 16px;
+  background: rgba(8, 10, 14, 0.78);
+  color: #f5f5f5;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  z-index: 50;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  max-width: min(420px, calc(100vw - 32px));
+}
+
+.controls-hint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 2px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.hint-modes {
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+.hint-modes strong {
+  color: #ff8c42;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.hint-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  background: rgba(16, 18, 24, 0.92);
+  border: 1px solid rgba(255, 140, 66, 0.5);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 13px;
+  z-index: 60;
+  backdrop-filter: blur(8px);
+  animation: toast-in 0.25s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}

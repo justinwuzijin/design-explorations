@@ -1,0 +1,3 @@
+# Drop the Mixamo character export here as `kicker.glb`.
+# The scene runs with a procedural fallback kicker until this file exists.
+# See ../../README.md ("Mixamo character") for the full export steps.
