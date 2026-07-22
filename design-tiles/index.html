@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>design tiles</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --font-brand: "Helvetica Neue", Helvetica, Arial, Inter, sans-serif;
+        --dt-bg: #f6f5f2;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--dt-bg);
+        font-family: var(--font-brand);
+      }
+
+      #root {
+        position: absolute;
+        inset: 0;
+      }
+
+      #mount {
+        position: absolute;
+        inset: 0;
+      }
+
+      #back {
+        position: fixed;
+        top: 22px;
+        left: 24px;
+        color: rgba(0, 0, 0, 0.4);
+        font-size: 0.73rem;
+        text-decoration: none;
+        letter-spacing: 0.04em;
+        z-index: 10;
+        transition: color 0.18s;
+      }
+
+      #back:hover {
+        color: rgba(0, 0, 0, 0.8);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
