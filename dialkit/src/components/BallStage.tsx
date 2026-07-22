@@ -1,76 +1,58 @@
-import { Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { ContactShadows, Environment, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { SoccerDials } from '../dials/useSoccerDials';
-import type { BallState2D, Vec2 } from '../sim/physics2d';
-import { FIELD } from '../sim/physics2d';
-import SoccerBall, { pathToWorld } from './SoccerBall';
+import type { BallState3D } from '../sim/physics3d';
+import { PITCH } from '../sim/physics3d';
+import SoccerBall from './SoccerBall';
+import Pitch from './Pitch';
+import Goal from './Goal';
+import ChaseCamera from './ChaseCamera';
 
 interface BallStageProps {
   dials: SoccerDials;
-  ball: BallState2D;
-  path: Vec2[];
+  ball: BallState3D;
+  status: 'idle' | 'flight' | 'goal' | 'miss';
 }
 
-function PathRibbon({ path, loft }: { path: Vec2[]; loft: number }) {
-  const points = useMemo(() => {
-    if (path.length < 2) return null;
-    return path.map(
-      (p) => pathToWorld(p.x, p.y, loft, FIELD.length)
-    );
-  }, [path, loft]);
-
-  if (!points) return null;
-
-  return (
-    <Line
-      points={points}
-      color="#ff6b35"
-      lineWidth={2}
-      transparent
-      opacity={0.55}
-    />
-  );
-}
-
-function Scene({ dials, ball, path }: BallStageProps) {
-  const loft = dials.kick.launchAngleDeg;
-
+function Scene({ dials, ball }: BallStageProps) {
   return (
     <>
-      <color attach="background" args={['#0c0e12']} />
-      <ambientLight intensity={0.35} />
+      <color attach="background" args={['#6fa8d4']} />
+      <fog attach="fog" args={['#8eb6d4', 45, 95]} />
+
+      <ambientLight intensity={0.7} />
       <directionalLight
-        position={[4, 8, 3]}
-        intensity={1.4}
+        position={[14, 24, 10]}
+        intensity={1.55}
         castShadow
         shadow-mapSize={[1024, 1024]}
+        shadow-camera-far={70}
+        shadow-camera-left={-22}
+        shadow-camera-right={22}
+        shadow-camera-top={22}
+        shadow-camera-bottom={-22}
+        color="#fff1d0"
       />
-      <directionalLight position={[-3, 2, -4]} intensity={0.35} color="#a8c4ff" />
+      <hemisphereLight args={['#c5dcff', '#3f5c30', 0.65]} />
 
-      <Suspense fallback={null}>
-        <Environment preset="studio" environmentIntensity={0.7} />
-      </Suspense>
+      <Pitch />
+      <Goal />
+      <SoccerBall ball={ball} />
 
-      <PathRibbon path={path} loft={loft} />
-      <SoccerBall ball={ball} loft={loft} fieldLength={FIELD.length} />
-
-      <ContactShadows
-        position={[0, 0, 0]}
-        opacity={0.45}
-        scale={28}
-        blur={2.4}
-        far={12}
-        resolution={512}
-        color="#000000"
-      />
-
-      {/* Soft floor cue — not a pitch, just grounds the shadow */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]} receiveShadow>
-        <planeGeometry args={[40, 40]} />
-        <meshBasicMaterial color="#0c0e12" />
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[ball.position.x, 0.015, ball.position.z]}
+      >
+        <circleGeometry args={[0.32 + Math.max(0, ball.position.y - 0.22) * 0.28, 24]} />
+        <meshBasicMaterial color="#142010" transparent opacity={0.3} depthWrite={false} />
       </mesh>
+
+      <ChaseCamera
+        ball={ball}
+        distance={dials.cam.distance}
+        height={dials.cam.height}
+        lag={dials.cam.lag}
+      />
     </>
   );
 }
@@ -80,10 +62,24 @@ export default function BallStage(props: BallStageProps) {
     <Canvas
       className="ball-canvas"
       shadows
-      camera={{ position: [5.5, 4.2, 9], fov: 38, near: 0.1, far: 80 }}
-      gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
-      onCreated={({ camera }) => {
-        camera.lookAt(0, 1.2, 0);
+      dpr={[1, 1.75]}
+      camera={{
+        position: [0, 2.4, PITCH.kickZ - 5.5],
+        fov: 40,
+        near: 0.1,
+        far: 120,
+      }}
+      gl={{
+        antialias: true,
+        alpha: false,
+        preserveDrawingBuffer: true,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.05,
+      }}
+      onCreated={({ gl, camera }) => {
+        gl.setClearColor('#6fa8d4', 1);
+        gl.shadowMap.type = THREE.PCFShadowMap;
+        camera.lookAt(0, 1, PITCH.goalZ);
       }}
     >
       <Scene {...props} />

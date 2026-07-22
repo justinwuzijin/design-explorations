@@ -3,7 +3,8 @@ node_modules
 
 # output
 out
-dist
+# Keep dist tracked so the static site index can link to dialkit/dist/
+# dist
 *.tgz
 
 # code coverage

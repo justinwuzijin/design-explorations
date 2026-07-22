@@ -1,134 +1,159 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { BallState2D } from '../sim/physics2d';
+import { BALL_R, type BallState3D } from '../sim/physics3d';
 
-const R = 0.42;
-
-function createBallTexture(): THREE.CanvasTexture {
-  const size = 512;
+function createBallMaps() {
+  const size = 1024;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  // Base leather
-  const g = ctx.createRadialGradient(size * 0.35, size * 0.3, 0, size * 0.5, size * 0.5, size * 0.7);
-  g.addColorStop(0, '#fafafa');
-  g.addColorStop(0.55, '#ececec');
-  g.addColorStop(1, '#cfcfcf');
-  ctx.fillStyle = g;
+  // Warm leather base
+  const base = ctx.createRadialGradient(
+    size * 0.32,
+    size * 0.28,
+    size * 0.05,
+    size * 0.5,
+    size * 0.5,
+    size * 0.72
+  );
+  base.addColorStop(0, '#ffffff');
+  base.addColorStop(0.45, '#f4f1ea');
+  base.addColorStop(0.85, '#d8d2c6');
+  base.addColorStop(1, '#b8b0a2');
+  ctx.fillStyle = base;
   ctx.fillRect(0, 0, size, size);
 
-  // Subtle grain
-  ctx.globalAlpha = 0.04;
-  for (let i = 0; i < 1200; i++) {
-    ctx.fillStyle = Math.random() > 0.5 ? '#000' : '#fff';
-    ctx.fillRect(Math.random() * size, Math.random() * size, 1.5, 1.5);
+  // Micro grain
+  for (let i = 0; i < 9000; i++) {
+    const a = Math.random() * 0.07;
+    ctx.fillStyle = Math.random() > 0.5 ? `rgba(0,0,0,${a})` : `rgba(255,255,255,${a})`;
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1.2, 1.2);
   }
-  ctx.globalAlpha = 1;
 
-  const drawPent = (cx: number, cy: number, r: number) => {
+  const drawPent = (cx: number, cy: number, r: number, rot = 0) => {
     ctx.beginPath();
     for (let i = 0; i < 5; i++) {
-      const a = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+      const a = rot + (i * 2 * Math.PI) / 5 - Math.PI / 2;
       const x = cx + r * Math.cos(a);
       const y = cy + r * Math.sin(a);
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    ctx.fill();
   };
 
-  ctx.fillStyle = '#141414';
-  drawPent(size / 2, size / 2, size * 0.11);
-
-  const ring = [
-    [0.5, 0.22],
-    [0.78, 0.38],
-    [0.68, 0.72],
-    [0.32, 0.72],
-    [0.22, 0.38],
+  // Classic black panels
+  const panels: Array<[number, number, number, number]> = [
+    [0.5, 0.5, 0.095, 0],
+    [0.5, 0.2, 0.07, 0.15],
+    [0.78, 0.35, 0.068, 0.4],
+    [0.72, 0.7, 0.066, -0.25],
+    [0.28, 0.7, 0.066, 0.35],
+    [0.22, 0.35, 0.068, -0.5],
+    [0.5, 0.82, 0.055, 0.1],
+    [0.12, 0.55, 0.05, 0.6],
+    [0.88, 0.55, 0.05, -0.6],
   ];
-  for (const [u, v] of ring) {
-    drawPent(u * size, v * size, size * 0.075);
+
+  for (const [u, v, s, rot] of panels) {
+    drawPent(u * size, v * size, s * size, rot);
+    const g = ctx.createRadialGradient(
+      u * size - s * size * 0.2,
+      v * size - s * size * 0.25,
+      0,
+      u * size,
+      v * size,
+      s * size
+    );
+    g.addColorStop(0, '#2a2a2a');
+    g.addColorStop(0.7, '#111111');
+    g.addColorStop(1, '#050505');
+    ctx.fillStyle = g;
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
   }
 
-  // Seam lines
-  ctx.strokeStyle = 'rgba(30,30,30,0.55)';
-  ctx.lineWidth = 3;
+  // Seam network
+  ctx.strokeStyle = 'rgba(25,22,18,0.45)';
+  ctx.lineWidth = 3.5;
   ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size * 0.28, 0, Math.PI * 2);
+  ctx.arc(size * 0.5, size * 0.5, size * 0.26, 0, Math.PI * 2);
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size * 0.42, 0.2, Math.PI * 1.4);
+  ctx.arc(size * 0.5, size * 0.5, size * 0.4, 0.35, Math.PI * 1.55);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(size * 0.5, size * 0.5, size * 0.46, size * 0.22, 0.4, 0, Math.PI * 2);
   ctx.stroke();
 
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  return tex;
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 16;
+
+  // Roughness variation
+  const roughCanvas = document.createElement('canvas');
+  roughCanvas.width = 512;
+  roughCanvas.height = 512;
+  const rctx = roughCanvas.getContext('2d')!;
+  rctx.fillStyle = '#6a6a6a';
+  rctx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 4000; i++) {
+    rctx.fillStyle = Math.random() > 0.5 ? '#7a7a7a' : '#555555';
+    rctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+  }
+  const roughnessMap = new THREE.CanvasTexture(roughCanvas);
+
+  return { map, roughnessMap };
 }
 
 interface SoccerBallProps {
-  ball: BallState2D;
-  loft: number;
-  fieldLength: number;
+  ball: BallState3D;
 }
 
-/** Map path coords → 3D: A at +z, B at -z, slight loft arc on Y. */
-export function pathToWorld(x: number, y: number, loftDeg: number, fieldLength: number) {
-  const t = Math.min(1, Math.max(0, y / fieldLength));
-  const loft = Math.sin(t * Math.PI) * (0.4 + loftDeg * 0.035);
-  return new THREE.Vector3(x * 0.55, R + loft, 6 - y * 0.45);
-}
-
-export default function SoccerBall({ ball, loft, fieldLength }: SoccerBallProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const tex = useMemo(() => createBallTexture(), []);
-  const lastPos = useRef(new THREE.Vector3());
-  const qSpin = useRef(new THREE.Quaternion());
+export default function SoccerBall({ ball }: SoccerBallProps) {
+  const group = useRef<THREE.Group>(null);
+  const maps = useMemo(() => createBallMaps(), []);
+  const q = useRef(new THREE.Quaternion());
+  const omegaAxis = useRef(new THREE.Vector3());
 
   useFrame((_, dt) => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
+    const g = group.current;
+    if (!g) return;
 
-    const pos = pathToWorld(ball.position.x, ball.position.y, loft, fieldLength);
-    mesh.position.copy(pos);
+    g.position.set(ball.position.x, ball.position.y, ball.position.z);
 
-    // Spin around vertical (Magnus) + roll from travel direction
-    const delta = pos.clone().sub(lastPos.current);
-    const dist = delta.length();
-    if (dist > 1e-5) {
-      const axis = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
-      if (axis.lengthSq() > 1e-8) {
-        axis.normalize();
-        const rollQ = new THREE.Quaternion().setFromAxisAngle(axis, dist / R);
-        qSpin.current.premultiply(rollQ);
-      }
+    const ox = ball.omega.x;
+    const oy = ball.omega.y;
+    const oz = ball.omega.z;
+    const w = Math.hypot(ox, oy, oz);
+    if (w > 1e-4) {
+      omegaAxis.current.set(ox, oy, oz).normalize();
+      const dq = new THREE.Quaternion().setFromAxisAngle(omegaAxis.current, w * dt);
+      q.current.premultiply(dq);
+      g.quaternion.copy(q.current);
     }
-    // Side spin (yaw)
-    const yawQ = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
-      ball.omega * dt
-    );
-    qSpin.current.premultiply(yawQ);
-    mesh.quaternion.copy(qSpin.current);
-    lastPos.current.copy(pos);
   });
 
   return (
-    <mesh ref={meshRef} castShadow>
-      <sphereGeometry args={[R, 64, 64]} />
-      <meshPhysicalMaterial
-        map={tex}
-        roughness={0.38}
-        metalness={0.02}
-        clearcoat={0.65}
-        clearcoatRoughness={0.22}
-        envMapIntensity={1.1}
-      />
-    </mesh>
+    <group ref={group}>
+      <mesh castShadow receiveShadow>
+        <sphereGeometry args={[BALL_R, 96, 96]} />
+        <meshPhysicalMaterial
+          map={maps.map}
+          roughnessMap={maps.roughnessMap}
+          roughness={0.4}
+          metalness={0.02}
+          clearcoat={0.45}
+          clearcoatRoughness={0.35}
+          envMapIntensity={0.85}
+        />
+      </mesh>
+    </group>
   );
 }
