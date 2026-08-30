@@ -1,20 +1,8 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
-  background: #1a2418;
-  color: #f2f2f2;
-}
-
+/*
+ * The page-level reset that used to live here (a naked `*` rule plus
+ * html/body/#root) moved into index.html, which is standalone-only. Imported
+ * into the shell app it would have reset and repainted the gallery too.
+ */
 .app-stage {
   position: relative;
   width: 100%;

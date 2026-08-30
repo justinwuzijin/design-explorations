@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "types": ["node"],
+
+    // Deliberately no baseUrl: it would resolve the bare `dialkit` import (the
+    // npm package) to the local ./dialkit exploration folder, which shares the
+    // name. `paths` entries below are relative to this file instead.
+    "paths": {
+      "@shell/*": ["./src/*"],
+      "@soccer-curve/*": ["./dialkit/src/*"],
+      "@design-tiles/*": ["./design-tiles/*"],
+      "@envelope/*": ["./envelope/src/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts", "dialkit/src", "design-tiles", "envelope/src"],
+  "exclude": ["**/node_modules", "**/dist"]
+}

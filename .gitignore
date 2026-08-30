@@ -17,3 +17,7 @@ node_modules/
 # tooling
 .vercel
 .turbo
+
+# build output
+dist/
+**/dist/
