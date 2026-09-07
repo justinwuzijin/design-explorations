@@ -40,22 +40,17 @@ function publicDirIndex(): Plugin {
   };
 }
 
-// The three React explorations keep their own package.json + vite.config so they
-// can still be run standalone (`cd dialkit && bun install && bun dev`). The shell
-// pulls their source in directly via these aliases, so there is only ever one
-// install, one dev server, and no committed dist/ to keep in sync.
+// design-tiles keeps its own package.json + vite.config so it can still be run
+// standalone (`cd design-tiles && bun install && bun dev`). The shell pulls its
+// source in directly via the alias, so there is only ever one install and one
+// dev server.
 export default defineConfig({
   plugins: [react(), publicDirIndex()],
   resolve: {
     alias: {
       '@shell': at('./src'),
-      '@soccer-curve': at('./dialkit/src'),
       '@design-tiles': at('./design-tiles'),
-      '@envelope': at('./envelope/src'),
     },
   },
   server: { port: 5173 },
-  // three.js pushes the soccer-curve chunk past the default 500 kB warning.
-  // That chunk is already split out and only fetched on its own route.
-  build: { chunkSizeWarningLimit: 1000 },
 });

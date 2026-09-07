@@ -22,16 +22,11 @@
 
     "types": ["node"],
 
-    // Deliberately no baseUrl: it would resolve the bare `dialkit` import (the
-    // npm package) to the local ./dialkit exploration folder, which shares the
-    // name. `paths` entries below are relative to this file instead.
     "paths": {
       "@shell/*": ["./src/*"],
-      "@soccer-curve/*": ["./dialkit/src/*"],
-      "@design-tiles/*": ["./design-tiles/*"],
-      "@envelope/*": ["./envelope/src/*"]
+      "@design-tiles/*": ["./design-tiles/*"]
     }
   },
-  "include": ["src", "vite.config.ts", "dialkit/src", "design-tiles", "envelope/src"],
+  "include": ["src", "vite.config.ts", "design-tiles"],
   "exclude": ["**/node_modules", "**/dist"]
 }
