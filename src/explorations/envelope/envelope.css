@@ -1,0 +1,234 @@
+.envelope-scene {
+  --paper: #efe6d4;
+  --paper-flap: #e7dcc6;
+  --seal: #7a2d2d;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(1200px 700px at 50% 40%, rgba(255, 252, 245, 0.7), transparent 55%),
+    #e8e0d2;
+  font-family: 'Inter', -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+.envelope-desk {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.envelope-stage {
+  position: relative;
+  width: min(380px, calc(100vw - 48px));
+  height: 280px;
+  transform-style: preserve-3d;
+}
+
+.envelope {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  height: 214px;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 22px 34px rgba(70, 48, 22, 0.18));
+  cursor: pointer;
+}
+
+.envelope-back,
+.envelope-pocket {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px 2px 5px 5px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 40%),
+    repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 11px,
+      rgba(90, 70, 40, 0.025) 11px,
+      rgba(90, 70, 40, 0.025) 12px
+    ),
+    var(--paper);
+}
+
+.envelope-back {
+  box-shadow: inset 0 0 0 1px rgba(80, 55, 25, 0.08);
+  cursor: pointer;
+}
+
+.envelope-pocket {
+  z-index: 3;
+  clip-path: polygon(0 38%, 50% 72%, 100% 38%, 100% 100%, 0 100%);
+  box-shadow: inset 0 10px 18px rgba(70, 48, 22, 0.06);
+}
+
+.stamp {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 36px;
+  height: 42px;
+  border: 1px dashed rgba(80, 55, 25, 0.28);
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.addr-line {
+  position: absolute;
+  left: 28px;
+  top: 78px;
+  width: 46%;
+  height: 1px;
+  background: rgba(80, 55, 25, 0.22);
+}
+
+.addr-line.short {
+  top: 96px;
+  width: 34%;
+}
+
+.addr-line.shorter {
+  top: 114px;
+  width: 28%;
+}
+
+.letter {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 46px;
+  height: 188px;
+  padding: 28px 26px;
+  background: #faf7f0;
+  border-radius: 1px;
+  box-shadow: 0 8px 18px rgba(60, 40, 20, 0.1);
+  z-index: 2;
+  color: #2a241c;
+}
+
+.letter-date {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(42, 36, 28, 0.45);
+  margin-bottom: 14px;
+}
+
+.letter-body {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  max-width: 16ch;
+}
+
+.flap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 132px;
+  transform-origin: 50% 0%;
+  transform-style: preserve-3d;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.flap-face,
+.flap-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.flap-face {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 55%),
+    var(--paper-flap);
+}
+
+.flap-back {
+  transform: rotateX(180deg);
+  background: color-mix(in srgb, var(--paper-flap) 82%, #8a7350);
+}
+
+.seal {
+  position: absolute;
+  left: 50%;
+  top: 108px;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.22), transparent 40%),
+    var(--seal);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15), inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+  pointer-events: none;
+}
+
+.opener-track {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 28px;
+  height: 48px;
+  z-index: 6;
+}
+
+.opener {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+
+.opener:active {
+  cursor: grabbing;
+}
+
+.opener-handle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #4a4a48, #1c1c1b);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+}
+
+.opener-blade {
+  width: 28px;
+  height: 3px;
+  border-radius: 1px 2px 2px 1px;
+  background: linear-gradient(180deg, #f0f0ec, #9c9c96);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.28);
+}
+
+.envelope-hint {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(42, 36, 28, 0.42);
+}
+
+@media (max-width: 540px) {
+  .envelope-stage {
+    height: 250px;
+  }
+
+  .letter-body {
+    font-size: 0.95rem;
+  }
+}

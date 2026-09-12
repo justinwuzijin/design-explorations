@@ -1,0 +1,141 @@
+/* Ported verbatim from the old static index.html — the layout that used to sit
+ * on <body> now sits on .gallery, so full-bleed routes aren't fighting it. */
+.gallery {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 32px 48px;
+}
+
+.gallery header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.wordmark {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+.year {
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.gallery main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px 0 40px;
+  max-width: 680px;
+}
+
+.section-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-bottom: 16px;
+}
+
+.projects {
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.project {
+  border-bottom: 1px solid var(--rule);
+}
+
+.project a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 12px 0;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 4px;
+  transition: background 0.1s, padding 0.1s;
+}
+
+.project a:hover {
+  background: var(--hover-bg);
+  padding-left: 10px;
+  padding-right: 10px;
+  margin: 0 -10px;
+}
+
+.project-left {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  min-width: 0;
+}
+
+.project-index {
+  font-size: 0.68rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  width: 18px;
+}
+
+.project-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #000;
+}
+
+.project-desc {
+  font-size: 0.73rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-right {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.project-date {
+  font-size: 0.73rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.project-arrow {
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 0.15s, color 0.15s;
+}
+
+.project a:hover .project-arrow {
+  transform: translateX(3px);
+  color: var(--fg);
+}
+
+.gallery footer {
+  font-size: 0.68rem;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 540px) {
+  .gallery { padding: 24px; }
+  .gallery main { padding: 40px 0 32px; }
+  .project-desc { display: none; }
+}

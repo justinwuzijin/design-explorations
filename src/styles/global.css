@@ -1,0 +1,74 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #f6f5f2;
+  --fg:       #000000;
+  --muted:    #666666;
+  --rule:     #dedcd8;
+  --hover-bg: #eeecea;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Full-bleed host for the React explorations. Each one used to get this from
+ * the html/body rules in its own standalone index.html; inside the shell those
+ * rules would leak onto the gallery, so the stage supplies them instead.
+ */
+.stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.stage-design-tiles {
+  --font-brand: 'Helvetica Neue', Helvetica, Arial, Inter, sans-serif;
+  background: #f6f5f2;
+  font-family: var(--font-brand);
+}
+
+.stage-design-tiles #mount {
+  position: absolute;
+  inset: 0;
+}
+
+.stage-envelope {
+  background: #e8e0d2;
+}
+
+/* Shared "← back" affordance for the in-app routes. */
+.stage-back {
+  position: fixed;
+  top: 22px;
+  left: 24px;
+  z-index: 100;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 0.73rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: color 0.18s;
+}
+
+.stage-back:hover { color: rgba(0, 0, 0, 0.8); }
+
+.stage-envelope .stage-back { color: rgba(42, 36, 28, 0.45); }
+.stage-envelope .stage-back:hover { color: rgba(42, 36, 28, 0.85); }
+
+.stage-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 0.73rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
