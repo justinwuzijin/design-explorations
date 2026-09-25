@@ -1,1 +1,1 @@
-random ideas i wanted to bring to life while studying at waterloo this summer
+random ideas i wanted to bring to life this summer
