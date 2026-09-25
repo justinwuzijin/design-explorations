@@ -29,7 +29,7 @@ export const projects: Project[] = [
   { index: '07', name: 'clocks in chungking', href: '/clocks-in-chungking/', date: '06.27.26', kind: 'static', hidden: true },
   { index: '08', name: 'breadboard', href: '/breadboard/', date: '07.04.26', kind: 'static' },
   { index: '09', name: 'design tiles', href: '/design-tiles', date: '07.21.26', kind: 'route' },
-  { index: '10', name: 'envelope', href: '/envelope', date: '08.15.26', kind: 'route' },
+  { index: '10', name: 'envelope', href: '/envelope', date: '08.15.26', kind: 'route', hidden: true },
 ];
 
 export const visibleProjects = projects.filter((p) => !p.hidden);
